@@ -217,6 +217,17 @@ class TestResolveDefaults:
         merged = depush.resolve_defaults({})
         assert merged["s3_profile"] == "ci-profile"
 
+    def test_aws_profile_fallback(self, monkeypatch):
+        monkeypatch.setenv("AWS_PROFILE", "default-aws-profile")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_profile"] == "default-aws-profile"
+
+    def test_s3_profile_takes_precedence_over_aws_profile(self, monkeypatch):
+        monkeypatch.setenv("S3_PROFILE", "explicit-profile")
+        monkeypatch.setenv("AWS_PROFILE", "default-aws-profile")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_profile"] == "explicit-profile"
+
     def test_env_overrides_yaml(self, monkeypatch):
         monkeypatch.setenv("S3_REGION", "eu-central-1")
         merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})

@@ -171,6 +171,13 @@ def resolve_defaults(yaml_cfg: dict) -> dict:
         else:
             merged[dest] = raw
 
+    # AWS_PROFILE is a widely-used standard env var; use it as a fallback for
+    # s3_profile when neither S3_PROFILE nor a YAML/CLI value was provided.
+    if "s3_profile" not in merged:
+        aws_profile = os.environ.get("AWS_PROFILE")
+        if aws_profile:
+            merged["s3_profile"] = aws_profile
+
     return merged
 
 
@@ -470,7 +477,7 @@ def build_parser() -> argparse.ArgumentParser:
     s3_group.add_argument(
         "--s3-profile",
         dest="s3_profile",
-        help="AWS credentials profile name  [env: S3_PROFILE]",
+        help="AWS credentials profile name  [env: S3_PROFILE, fallback: AWS_PROFILE]",
     )
     s3_group.add_argument(
         "--s3-access-key", dest="s3_access_key", help="[env: S3_ACCESS_KEY]"

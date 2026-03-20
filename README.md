@@ -119,7 +119,7 @@ All options can also be set via environment variables:
 | `S3_BUCKET` | S3/MinIO bucket name | *(required for s3)* |
 | `S3_ENDPOINT` | Custom endpoint URL for MinIO | *(AWS default)* |
 | `S3_REGION` | AWS region | `us-east-1` |
-| `S3_PROFILE` | AWS credentials profile name (from `~/.aws/credentials`) | |
+| `S3_PROFILE` | AWS credentials profile name (from `~/.aws/credentials`); falls back to `AWS_PROFILE` | |
 | `S3_ACCESS_KEY` | Access key / MinIO username | |
 | `S3_SECRET_KEY` | Secret key / MinIO password | |
 | `SSH_HOST` | SSH server hostname or IP | *(required for ssh)* |
