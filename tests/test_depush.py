@@ -20,20 +20,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent))
-import depush
-from depush import (
-    DEFAULTS,
-    collect_files,
-    deploy_local,
-    deploy_s3,
-    deploy_ssh,
-    load_ignore_spec,
-    load_yaml_config,
-    read_version,
-    resolve_defaults,
-    validate,
-)
+from depush import depush
 
 # ---------------------------------------------------------------------------
 # Constants matching docker-compose services
@@ -122,7 +109,7 @@ class TestLoadYamlConfig:
             dry_run: true
             """
         )
-        cfg = load_yaml_config(str(p))
+        cfg = depush.load_yaml_config(str(p))
         assert cfg["target"] == "s3"
         assert cfg["prefix"] == "myapp"
         assert cfg["codebase_dir"] == "./cb"
@@ -139,7 +126,7 @@ class TestLoadYamlConfig:
               secret_key: SECRET
             """
         )
-        cfg = load_yaml_config(str(p))
+        cfg = depush.load_yaml_config(str(p))
         assert cfg["s3_bucket"] == "my-bucket"
         assert cfg["s3_endpoint"] == "http://minio:9000"
         assert cfg["s3_region"] == "eu-west-1"
@@ -158,7 +145,7 @@ class TestLoadYamlConfig:
               deploy_root: /srv/releases
             """
         )
-        cfg = load_yaml_config(str(p))
+        cfg = depush.load_yaml_config(str(p))
         assert cfg["ssh_host"] == "prod.example.com"
         assert cfg["ssh_port"] == 2222
         assert cfg["ssh_user"] == "deploy"
@@ -173,16 +160,16 @@ class TestLoadYamlConfig:
               dest: /srv/dist
             """
         )
-        cfg = load_yaml_config(str(p))
+        cfg = depush.load_yaml_config(str(p))
         assert cfg["local_dest"] == "/srv/dist"
 
     def test_empty_file_returns_empty_dict(self, cfg_file):
         p = cfg_file("")
-        assert load_yaml_config(str(p)) == {}
+        assert depush.load_yaml_config(str(p)) == {}
 
     def test_missing_file_exits(self, tmp_path):
         with pytest.raises(SystemExit):
-            load_yaml_config(str(tmp_path / "nonexistent.yaml"))
+            depush.load_yaml_config(str(tmp_path / "nonexistent.yaml"))
 
     def test_unknown_keys_ignored(self, cfg_file):
         p = cfg_file(
@@ -193,7 +180,7 @@ class TestLoadYamlConfig:
               bucket: real-bucket
             """
         )
-        cfg = load_yaml_config(str(p))
+        cfg = depush.load_yaml_config(str(p))
         assert "unknown_top_key" not in cfg
         assert cfg["s3_bucket"] == "real-bucket"
 
@@ -205,40 +192,40 @@ class TestLoadYamlConfig:
 
 class TestResolveDefaults:
     def test_hardcoded_defaults_present(self):
-        merged = resolve_defaults({})
-        for k, v in DEFAULTS.items():
+        merged = depush.resolve_defaults({})
+        for k, v in depush.DEFAULTS.items():
             assert merged[k] == v
 
     def test_yaml_overrides_hardcoded(self):
-        merged = resolve_defaults({"s3_region": "ap-southeast-1"})
+        merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})
         assert merged["s3_region"] == "ap-southeast-1"
 
     def test_env_overrides_yaml(self, monkeypatch):
         monkeypatch.setenv("S3_REGION", "eu-central-1")
-        merged = resolve_defaults({"s3_region": "ap-southeast-1"})
+        merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})
         assert merged["s3_region"] == "eu-central-1"
 
     def test_env_bool_dry_run(self, monkeypatch):
         for truthy in ("1", "true", "yes", "TRUE", "YES"):
             monkeypatch.setenv("DEPLOY_DRY_RUN", truthy)
-            assert resolve_defaults({})["dry_run"] is True
+            assert depush.resolve_defaults({})["dry_run"] is True
 
         for falsy in ("0", "false", "no"):
             monkeypatch.setenv("DEPLOY_DRY_RUN", falsy)
-            assert resolve_defaults({})["dry_run"] is False
+            assert depush.resolve_defaults({})["dry_run"] is False
 
     def test_env_ssh_port_int(self, monkeypatch):
         monkeypatch.setenv("SSH_PORT", "2222")
-        assert resolve_defaults({})["ssh_port"] == 2222
+        assert depush.resolve_defaults({})["ssh_port"] == 2222
 
     def test_env_ssh_port_invalid_exits(self, monkeypatch):
         monkeypatch.setenv("SSH_PORT", "not-a-number")
         with pytest.raises(SystemExit):
-            resolve_defaults({})
+            depush.resolve_defaults({})
 
     def test_env_not_set_does_not_override(self, monkeypatch):
         monkeypatch.delenv("SSH_PORT", raising=False)
-        merged = resolve_defaults({"ssh_port": 9999})
+        merged = depush.resolve_defaults({"ssh_port": 9999})
         assert merged["ssh_port"] == 9999
 
 
@@ -250,15 +237,15 @@ class TestResolveDefaults:
 class TestReadVersion:
     def test_reads_version(self, tmp_path):
         (tmp_path / "version").write_text("2.0.0\n")
-        assert read_version(tmp_path) == "2.0.0"
+        assert depush.read_version(tmp_path) == "2.0.0"
 
     def test_strips_whitespace(self, tmp_path):
         (tmp_path / "version").write_text("  v1.5.0  \n")
-        assert read_version(tmp_path) == "v1.5.0"
+        assert depush.read_version(tmp_path) == "v1.5.0"
 
     def test_missing_file_exits(self, tmp_path):
         with pytest.raises(SystemExit):
-            read_version(tmp_path)
+            depush.read_version(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -268,31 +255,31 @@ class TestReadVersion:
 
 class TestCollectFiles:
     def test_returns_only_files(self, tmp_codebase):
-        files = collect_files(tmp_codebase)
+        files = depush.collect_files(tmp_codebase)
         assert all(f.is_file() for f in files)
 
     def test_finds_nested_files(self, tmp_codebase):
-        names = {f.name for f in collect_files(tmp_codebase)}
+        names = {f.name for f in depush.collect_files(tmp_codebase)}
         assert "utils.py" in names
 
     def test_excludes_git(self, tmp_path):
         (tmp_path / ".git").mkdir()
         (tmp_path / ".git" / "config").write_text("[core]\n")
         (tmp_path / "real.py").write_text("x = 1\n")
-        files = collect_files(tmp_path)
+        files = depush.collect_files(tmp_path)
         assert all(".git" not in str(f) for f in files)
         assert any(f.name == "real.py" for f in files)
 
     def test_sorted_output(self, tmp_codebase):
-        files = collect_files(tmp_codebase)
+        files = depush.collect_files(tmp_codebase)
         assert files == sorted(files)
 
     def test_empty_dir_returns_empty(self, tmp_path):
-        assert collect_files(tmp_path) == []
+        assert depush.collect_files(tmp_path) == []
 
     def test_excludes_depush_yaml(self, tmp_codebase):
         (tmp_codebase / "depush.yaml").write_text("target: s3\n")
-        names = {f.name for f in collect_files(tmp_codebase)}
+        names = {f.name for f in depush.collect_files(tmp_codebase)}
         assert "depush.yaml" not in names
 
     def test_depush_yaml_in_subdir_not_excluded(self, tmp_codebase):
@@ -300,7 +287,7 @@ class TestCollectFiles:
         sub = tmp_codebase / "conf"
         sub.mkdir()
         (sub / "depush.yaml").write_text("target: s3\n")
-        names = {f.name for f in collect_files(tmp_codebase)}
+        names = {f.name for f in depush.collect_files(tmp_codebase)}
         assert "depush.yaml" in names
 
 
@@ -311,43 +298,43 @@ class TestCollectFiles:
 
 class TestLoadIgnoreSpec:
     def test_returns_none_when_no_file(self, tmp_path):
-        assert load_ignore_spec(tmp_path) is None
+        assert depush.load_ignore_spec(tmp_path) is None
 
     def test_returns_spec_when_file_exists(self, tmp_path):
         (tmp_path / ".depushignore").write_text("*.log\n")
-        spec = load_ignore_spec(tmp_path)
+        spec = depush.load_ignore_spec(tmp_path)
         assert spec is not None
 
     def test_ignored_file_not_in_collect(self, tmp_codebase):
         (tmp_codebase / ".depushignore").write_text("*.log\n")
         (tmp_codebase / "debug.log").write_text("log data\n")
-        spec = load_ignore_spec(tmp_codebase)
-        names = {f.name for f in collect_files(tmp_codebase, spec)}
+        spec = depush.load_ignore_spec(tmp_codebase)
+        names = {f.name for f in depush.collect_files(tmp_codebase, spec)}
         assert "debug.log" not in names
 
     def test_non_ignored_file_still_included(self, tmp_codebase):
         (tmp_codebase / ".depushignore").write_text("*.log\n")
-        spec = load_ignore_spec(tmp_codebase)
-        names = {f.name for f in collect_files(tmp_codebase, spec)}
+        spec = depush.load_ignore_spec(tmp_codebase)
+        names = {f.name for f in depush.collect_files(tmp_codebase, spec)}
         assert "main.py" in names
 
     def test_depushignore_itself_excluded(self, tmp_codebase):
         (tmp_codebase / ".depushignore").write_text("*.log\n")
-        spec = load_ignore_spec(tmp_codebase)
-        names = {f.name for f in collect_files(tmp_codebase, spec)}
+        spec = depush.load_ignore_spec(tmp_codebase)
+        names = {f.name for f in depush.collect_files(tmp_codebase, spec)}
         assert ".depushignore" not in names
 
     def test_directory_pattern(self, tmp_codebase):
         (tmp_codebase / ".depushignore").write_text("lib/\n")
-        spec = load_ignore_spec(tmp_codebase)
-        names = {f.name for f in collect_files(tmp_codebase, spec)}
+        spec = depush.load_ignore_spec(tmp_codebase)
+        names = {f.name for f in depush.collect_files(tmp_codebase, spec)}
         assert "utils.py" not in names
         assert "main.py" in names
 
     def test_negation_pattern(self, tmp_codebase):
         (tmp_codebase / ".depushignore").write_text("*.py\n!main.py\n")
-        spec = load_ignore_spec(tmp_codebase)
-        names = {f.name for f in collect_files(tmp_codebase, spec)}
+        spec = depush.load_ignore_spec(tmp_codebase)
+        names = {f.name for f in depush.collect_files(tmp_codebase, spec)}
         assert "main.py" in names
         assert "utils.py" not in names
 
@@ -362,8 +349,10 @@ class TestDeployLocalIgnore:
         (target_dir / "secrets.env").write_text("KEY=value\n")
         (tmp_codebase / ".depushignore").write_text("*.env\n")
 
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=False)
-        deploy_local(args, tmp_codebase, deploy_path)
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=False
+        )
+        depush.deploy_local(args, tmp_codebase, deploy_path)
 
         assert (target_dir / "secrets.env").exists()
 
@@ -371,10 +360,11 @@ class TestDeployLocalIgnore:
         (tmp_codebase / ".depushignore").write_text("*.log\n")
         (tmp_codebase / "debug.log").write_text("log\n")
         dest = tmp_path / "dist"
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=False)
-        deploy_local(args, tmp_codebase, "mylib/1.2.3")
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=False
+        )
+        depush.deploy_local(args, tmp_codebase, "mylib/1.2.3")
         assert not (dest / "mylib" / "1.2.3" / "debug.log").exists()
-
 
 
 # ---------------------------------------------------------------------------
@@ -384,39 +374,39 @@ class TestValidate:
     def test_missing_target_exits(self):
         args = _make_args(target=None)
         with pytest.raises(SystemExit):
-            validate(args)
+            depush.validate(args)
 
     def test_missing_prefix_exits(self):
         args = _make_args(prefix=None)
         with pytest.raises(SystemExit):
-            validate(args)
+            depush.validate(args)
 
     def test_s3_missing_bucket_exits(self):
         args = _make_args(target="s3", s3_bucket=None)
         with pytest.raises(SystemExit):
-            validate(args)
+            depush.validate(args)
 
     def test_s3_with_bucket_ok(self):
         args = _make_args(target="s3", s3_bucket="my-bucket")
-        validate(args)  # should not raise
+        depush.validate(args)  # should not raise
 
     def test_ssh_missing_host_exits(self):
         args = _make_args(target="ssh", ssh_host=None)
         with pytest.raises(SystemExit):
-            validate(args)
+            depush.validate(args)
 
     def test_ssh_with_host_ok(self):
         args = _make_args(target="ssh", ssh_host="prod.example.com")
-        validate(args)
+        depush.validate(args)
 
     def test_local_missing_dest_exits(self):
         args = _make_args(target="local", local_dest=None)
         with pytest.raises(SystemExit):
-            validate(args)
+            depush.validate(args)
 
     def test_local_with_dest_ok(self):
         args = _make_args(target="local", local_dest="/tmp/dist")
-        validate(args)
+        depush.validate(args)
 
 
 # ---------------------------------------------------------------------------
@@ -427,21 +417,27 @@ class TestValidate:
 class TestDeployLocal:
     def test_creates_files_at_destination(self, tmp_codebase, tmp_path):
         dest = tmp_path / "dist"
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=False)
-        deploy_local(args, tmp_codebase, "mylib/1.2.3")
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=False
+        )
+        depush.deploy_local(args, tmp_codebase, "mylib/1.2.3")
         assert (dest / "mylib" / "1.2.3" / "main.py").exists()
         assert (dest / "mylib" / "1.2.3" / "lib" / "utils.py").exists()
 
     def test_dry_run_does_not_create_files(self, tmp_codebase, tmp_path):
         dest = tmp_path / "dist"
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=True)
-        deploy_local(args, tmp_codebase, "mylib/1.2.3")
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=True
+        )
+        depush.deploy_local(args, tmp_codebase, "mylib/1.2.3")
         assert not dest.exists()
 
     def test_dry_run_prints_paths(self, tmp_codebase, tmp_path, capsys):
         dest = tmp_path / "dist"
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=True)
-        deploy_local(args, tmp_codebase, "mylib/1.2.3")
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=True
+        )
+        depush.deploy_local(args, tmp_codebase, "mylib/1.2.3")
         out = capsys.readouterr().out
         assert "[dry-run]" in out
         assert "main.py" in out
@@ -454,8 +450,10 @@ class TestDeployLocal:
         stale = target_dir / "stale_old_file.py"
         stale.write_text("old\n")
 
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=False)
-        deploy_local(args, tmp_codebase, deploy_path)
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=False
+        )
+        depush.deploy_local(args, tmp_codebase, deploy_path)
         assert not stale.exists()
 
     def test_dry_run_reports_stale_deletions(self, tmp_codebase, tmp_path, capsys):
@@ -465,22 +463,28 @@ class TestDeployLocal:
         target_dir.mkdir(parents=True)
         (target_dir / "stale.py").write_text("old\n")
 
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=True)
-        deploy_local(args, tmp_codebase, deploy_path)
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=True
+        )
+        depush.deploy_local(args, tmp_codebase, deploy_path)
         out = capsys.readouterr().out
         assert "stale.py" in out
 
     def test_exits_on_empty_codebase(self, tmp_path):
         empty = tmp_path / "empty"
         empty.mkdir()
-        args = _make_args(target="local", local_dest=str(tmp_path / "dist"), dry_run=False)
+        args = _make_args(
+            target="local", local_dest=str(tmp_path / "dist"), dry_run=False
+        )
         with pytest.raises(SystemExit):
-            deploy_local(args, empty, "mylib/1.0.0")
+            depush.deploy_local(args, empty, "mylib/1.0.0")
 
     def test_summary_line_printed(self, tmp_codebase, tmp_path, capsys):
         dest = tmp_path / "dist"
-        args = _make_args(target="local", prefix="mylib", local_dest=str(dest), dry_run=False)
-        deploy_local(args, tmp_codebase, "mylib/1.2.3")
+        args = _make_args(
+            target="local", prefix="mylib", local_dest=str(dest), dry_run=False
+        )
+        depush.deploy_local(args, tmp_codebase, "mylib/1.2.3")
         out = capsys.readouterr().out
         assert "Deployed" in out
         assert "3 file(s)" in out
@@ -554,7 +558,7 @@ class TestDeployS3Integration:
             s3_secret_key=MINIO_SECRET_KEY,
             dry_run=False,
         )
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
 
         keys = [
             obj["Key"]
@@ -583,7 +587,7 @@ class TestDeployS3Integration:
             s3_secret_key=MINIO_SECRET_KEY,
             dry_run=False,
         )
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
 
         remaining = [
             obj["Key"]
@@ -605,7 +609,7 @@ class TestDeployS3Integration:
             s3_secret_key=MINIO_SECRET_KEY,
             dry_run=True,
         )
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
 
         pages = list(
             minio_bucket.get_paginator("list_objects_v2").paginate(
@@ -626,8 +630,8 @@ class TestDeployS3Integration:
             s3_secret_key=MINIO_SECRET_KEY,
             dry_run=False,
         )
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")  # second deploy should not error
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")  # second deploy should not error
 
         keys = [
             obj["Key"]
@@ -650,7 +654,7 @@ class TestDeployS3Integration:
             s3_secret_key=MINIO_SECRET_KEY,
             dry_run=False,
         )
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
 
         keys = [
             obj["Key"]
@@ -679,7 +683,7 @@ class TestDeployS3Integration:
             s3_secret_key=MINIO_SECRET_KEY,
             dry_run=False,
         )
-        deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
 
         keys = [
             obj["Key"]
@@ -689,6 +693,8 @@ class TestDeployS3Integration:
             for obj in page.get("Contents", [])
         ]
         assert "mylib/1.2.3/secrets.env" in keys
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -735,7 +741,7 @@ class TestDeploySSHIntegration:
             ssh_deploy_root=SSH_DEPLOY_ROOT,
             dry_run=False,
         )
-        deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert any("main.py" in f for f in remote_files)
@@ -749,8 +755,12 @@ class TestDeploySSHIntegration:
         self._remote_cleanup(ssh_client, remote_root)
 
         # Pre-place a stale file
-        ssh_client.exec_command(f"mkdir -p '{remote_root}' && echo stale > '{remote_root}/stale.py'")
-        import time; time.sleep(0.2)  # give the remote command time to complete
+        ssh_client.exec_command(
+            f"mkdir -p '{remote_root}' && echo stale > '{remote_root}/stale.py'"
+        )
+        import time
+
+        time.sleep(0.2)  # give the remote command time to complete
 
         args = _make_args(
             target="ssh",
@@ -762,7 +772,7 @@ class TestDeploySSHIntegration:
             ssh_deploy_root=SSH_DEPLOY_ROOT,
             dry_run=False,
         )
-        deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert not any("stale.py" in f for f in remote_files)
@@ -784,7 +794,7 @@ class TestDeploySSHIntegration:
             ssh_deploy_root=SSH_DEPLOY_ROOT,
             dry_run=True,
         )
-        deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert remote_files == []
@@ -804,8 +814,8 @@ class TestDeploySSHIntegration:
             ssh_deploy_root=SSH_DEPLOY_ROOT,
             dry_run=False,
         )
-        deploy_ssh(args, tmp_codebase, deploy_path)
-        deploy_ssh(args, tmp_codebase, deploy_path)  # second call should not error
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)  # second call should not error
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert any("main.py" in f for f in remote_files)
@@ -828,7 +838,7 @@ class TestDeploySSHIntegration:
             ssh_deploy_root=SSH_DEPLOY_ROOT,
             dry_run=False,
         )
-        deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert not any(f.endswith(".py") for f in remote_files)
@@ -841,8 +851,12 @@ class TestDeploySSHIntegration:
         self._remote_cleanup(ssh_client, remote_root)
 
         # Pre-place a file matching an ignore pattern
-        ssh_client.exec_command(f"mkdir -p '{remote_root}' && echo KEY=value > '{remote_root}/secrets.env'")
-        import time; time.sleep(0.2)
+        ssh_client.exec_command(
+            f"mkdir -p '{remote_root}' && echo KEY=value > '{remote_root}/secrets.env'"
+        )
+        import time
+
+        time.sleep(0.2)
 
         (tmp_codebase / ".depushignore").write_text("*.env\n")
         args = _make_args(
@@ -855,7 +869,7 @@ class TestDeploySSHIntegration:
             ssh_deploy_root=SSH_DEPLOY_ROOT,
             dry_run=False,
         )
-        deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert any("secrets.env" in f for f in remote_files)

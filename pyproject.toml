@@ -1,13 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "depush"
 version = "0.1.0"
-description = "Add your description here"
+description = "Deploy a versioned codebase to S3/MinIO, SSH, or a local directory"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
 dependencies = [
     "boto3>=1.42.69",
     "paramiko>=4.0.0",
     "pathspec>=1.0.4",
-    "pytest>=9.0.2",
     "pyyaml>=6.0.3",
 ]
+
+[project.scripts]
+depush = "depush.depush:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/depush"]
+

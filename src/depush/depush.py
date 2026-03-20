@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-deploy.py — deploy a versioned codebase directory to S3/MinIO, SSH, or a local directory.
-v1.1.0
+depush — deploy a versioned codebase directory to S3/MinIO, SSH, or a local directory.
 
 All options can be set via CLI flags, environment variables, or a YAML config file.
 Precedence (highest to lowest): CLI flag > environment variable > YAML config > default.
 
 Usage (local):
-  python deploy.py --target s3 --prefix mylib
-  python deploy.py --target ssh --prefix mylib
-  python deploy.py --target local --prefix mylib --local-dest /srv/releases
-  python deploy.py --config deploy-config.yaml
+  depush --target s3 --prefix mylib
+  depush --target ssh --prefix mylib
+  depush --target local --prefix mylib --local-dest /srv/releases
+  depush --config deploy-config.yaml
 
 Usage (Docker):
   docker run --rm -v ./codebase:/codebase \\
@@ -59,31 +58,31 @@ from pathlib import Path
 # Hardcoded fallback defaults
 DEFAULTS: dict = {
     "codebase_dir": ".",
-    "dry_run":      False,
-    "local_dest":   "./dist",
-    "s3_region":    "us-east-1",
-    "ssh_port":     22,
-    "ssh_user":     "admin",
+    "dry_run": False,
+    "local_dest": "./dist",
+    "s3_region": "us-east-1",
+    "ssh_port": 22,
+    "ssh_user": "admin",
     "ssh_deploy_root": "/deployments",
 }
 
 # Mapping from argparse dest -> environment variable name
 ENV_MAP: dict[str, str] = {
-    "target":          "DEPLOY_TARGET",
-    "prefix":          "DEPLOY_PREFIX",
-    "codebase_dir":    "DEPLOY_CODEBASE_DIR",
-    "dry_run":         "DEPLOY_DRY_RUN",
-    "local_dest":      "DEPLOY_LOCAL_DEST",
-    "s3_bucket":       "S3_BUCKET",
-    "s3_endpoint":     "S3_ENDPOINT",
-    "s3_region":       "S3_REGION",
-    "s3_access_key":   "S3_ACCESS_KEY",
-    "s3_secret_key":   "S3_SECRET_KEY",
-    "ssh_host":        "SSH_HOST",
-    "ssh_port":        "SSH_PORT",
-    "ssh_user":        "SSH_USER",
-    "ssh_password":    "SSH_PASSWORD",
-    "ssh_key_file":    "SSH_KEY_FILE",
+    "target": "DEPLOY_TARGET",
+    "prefix": "DEPLOY_PREFIX",
+    "codebase_dir": "DEPLOY_CODEBASE_DIR",
+    "dry_run": "DEPLOY_DRY_RUN",
+    "local_dest": "DEPLOY_LOCAL_DEST",
+    "s3_bucket": "S3_BUCKET",
+    "s3_endpoint": "S3_ENDPOINT",
+    "s3_region": "S3_REGION",
+    "s3_access_key": "S3_ACCESS_KEY",
+    "s3_secret_key": "S3_SECRET_KEY",
+    "ssh_host": "SSH_HOST",
+    "ssh_port": "SSH_PORT",
+    "ssh_user": "SSH_USER",
+    "ssh_password": "SSH_PASSWORD",
+    "ssh_key_file": "SSH_KEY_FILE",
     "ssh_deploy_root": "SSH_DEPLOY_ROOT",
 }
 
@@ -91,6 +90,7 @@ ENV_MAP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def load_yaml_config(path: str) -> dict:
     """Load and flatten a YAML config file into a flat dict matching argparse dests."""
@@ -116,12 +116,21 @@ def load_yaml_config(path: str) -> dict:
     # Nested sections -> flattened with section prefix
     section_map = {
         "local": {"dest": "local_dest"},
-        "s3":    {"bucket": "s3_bucket", "endpoint": "s3_endpoint",
-                  "region": "s3_region", "access_key": "s3_access_key",
-                  "secret_key": "s3_secret_key"},
-        "ssh":   {"host": "ssh_host", "port": "ssh_port", "user": "ssh_user",
-                  "password": "ssh_password", "key_file": "ssh_key_file",
-                  "deploy_root": "ssh_deploy_root"},
+        "s3": {
+            "bucket": "s3_bucket",
+            "endpoint": "s3_endpoint",
+            "region": "s3_region",
+            "access_key": "s3_access_key",
+            "secret_key": "s3_secret_key",
+        },
+        "ssh": {
+            "host": "ssh_host",
+            "port": "ssh_port",
+            "user": "ssh_user",
+            "password": "ssh_password",
+            "key_file": "ssh_key_file",
+            "deploy_root": "ssh_deploy_root",
+        },
     }
     for section, mapping in section_map.items():
         if section in raw and isinstance(raw[section], dict):
@@ -204,7 +213,10 @@ def collect_files(codebase_dir: Path, ignore_spec=None) -> list[Path]:
 # Local directory deployment
 # ---------------------------------------------------------------------------
 
-def deploy_local(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -> None:
+
+def deploy_local(
+    args: argparse.Namespace, codebase_dir: Path, deploy_path: str
+) -> None:
     dest = Path(args.local_dest) / deploy_path
     ignore_spec = load_ignore_spec(codebase_dir)
 
@@ -250,6 +262,7 @@ def deploy_local(args: argparse.Namespace, codebase_dir: Path, deploy_path: str)
 # S3 / MinIO deployment
 # ---------------------------------------------------------------------------
 
+
 def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -> None:
     try:
         import boto3
@@ -260,9 +273,9 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
     ignore_spec = load_ignore_spec(codebase_dir)
 
     client_kwargs: dict = {
-        "aws_access_key_id":     args.s3_access_key or None,
+        "aws_access_key_id": args.s3_access_key or None,
         "aws_secret_access_key": args.s3_secret_key or None,
-        "region_name":           args.s3_region,
+        "region_name": args.s3_region,
     }
     if args.s3_endpoint:
         client_kwargs["endpoint_url"] = args.s3_endpoint
@@ -291,7 +304,7 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
         for obj in page.get("Contents", []):
             if obj["Key"] in expected_keys:
                 continue
-            rel_key = obj["Key"][len(deploy_path) + 1:]
+            rel_key = obj["Key"][len(deploy_path) + 1 :]
             if ignore_spec and ignore_spec.match_file(rel_key):
                 continue
             deleted += 1
@@ -303,12 +316,15 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
 
     tag = "[dry-run] " if args.dry_run else ""
     suffix = f", {deleted} deleted" if deleted else ""
-    print(f"\n{tag}Deployed {len(files)} file(s) to s3://{args.s3_bucket}/{deploy_path}/{suffix}")
+    print(
+        f"\n{tag}Deployed {len(files)} file(s) to s3://{args.s3_bucket}/{deploy_path}/{suffix}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # SSH / remote filesystem deployment
 # ---------------------------------------------------------------------------
+
 
 def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -> None:
     try:
@@ -325,7 +341,9 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
             rel = f.relative_to(codebase_dir)
             print(f"  [dry-run] {args.ssh_user}@{args.ssh_host}:{remote_root}/{rel}")
         print(f"\n[dry-run] Would deploy {len(files)} file(s) to {remote_root}/")
-        print("[dry-run] Stale remote files would also be deleted (requires connection to determine)")
+        print(
+            "[dry-run] Stale remote files would also be deleted (requires connection to determine)"
+        )
         return
 
     client = paramiko.SSHClient()
@@ -333,7 +351,7 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
 
     connect_kwargs: dict = {
         "hostname": args.ssh_host,
-        "port":     args.ssh_port,
+        "port": args.ssh_port,
         "username": args.ssh_user,
     }
     if args.ssh_password:
@@ -350,7 +368,9 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
         _, stdout, stderr = client.exec_command(cmd)
         exit_code = stdout.channel.recv_exit_status()
         if exit_code != 0:
-            sys.exit(f"Error: remote command failed ({exit_code}): {cmd}\n{stderr.read().decode()}")
+            sys.exit(
+                f"Error: remote command failed ({exit_code}): {cmd}\n{stderr.read().decode()}"
+            )
 
     sftp = client.open_sftp()
 
@@ -372,7 +392,7 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
     remote_files = set(ls_out.read().decode().splitlines())
     deleted = 0
     for stale in sorted(remote_files - expected_remotes):
-        rel_path = stale[len(remote_root) + 1:]
+        rel_path = stale[len(remote_root) + 1 :]
         if ignore_spec and ignore_spec.match_file(rel_path):
             continue
         deleted += 1
@@ -382,12 +402,15 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
     sftp.close()
     client.close()
     suffix = f", {deleted} deleted" if deleted else ""
-    print(f"\nDeployed {len(files)} file(s) to {args.ssh_user}@{args.ssh_host}:{remote_root}/{suffix}")
+    print(
+        f"\nDeployed {len(files)} file(s) to {args.ssh_user}@{args.ssh_host}:{remote_root}/{suffix}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -433,27 +456,47 @@ def build_parser() -> argparse.ArgumentParser:
 
     # S3 / MinIO options
     s3_group = parser.add_argument_group("S3 / MinIO options")
-    s3_group.add_argument("--s3-bucket",      dest="s3_bucket",      help="[env: S3_BUCKET]")
-    s3_group.add_argument("--s3-endpoint",    dest="s3_endpoint",    help="Custom endpoint URL for MinIO  [env: S3_ENDPOINT]")
-    s3_group.add_argument("--s3-region",      dest="s3_region",      help="[env: S3_REGION]")
-    s3_group.add_argument("--s3-access-key",  dest="s3_access_key",  help="[env: S3_ACCESS_KEY]")
-    s3_group.add_argument("--s3-secret-key",  dest="s3_secret_key",  help="[env: S3_SECRET_KEY]")
+    s3_group.add_argument("--s3-bucket", dest="s3_bucket", help="[env: S3_BUCKET]")
+    s3_group.add_argument(
+        "--s3-endpoint",
+        dest="s3_endpoint",
+        help="Custom endpoint URL for MinIO  [env: S3_ENDPOINT]",
+    )
+    s3_group.add_argument("--s3-region", dest="s3_region", help="[env: S3_REGION]")
+    s3_group.add_argument(
+        "--s3-access-key", dest="s3_access_key", help="[env: S3_ACCESS_KEY]"
+    )
+    s3_group.add_argument(
+        "--s3-secret-key", dest="s3_secret_key", help="[env: S3_SECRET_KEY]"
+    )
 
     # SSH options
     ssh_group = parser.add_argument_group("SSH options")
-    ssh_group.add_argument("--ssh-host",        dest="ssh_host",        help="[env: SSH_HOST]")
-    ssh_group.add_argument("--ssh-port",        dest="ssh_port",        type=int, help="[env: SSH_PORT]")
-    ssh_group.add_argument("--ssh-user",        dest="ssh_user",        help="[env: SSH_USER]")
-    ssh_group.add_argument("--ssh-password",    dest="ssh_password",    help="[env: SSH_PASSWORD]")
-    ssh_group.add_argument("--ssh-key-file",    dest="ssh_key_file",    help="Path to private key  [env: SSH_KEY_FILE]")
-    ssh_group.add_argument("--ssh-deploy-root", dest="ssh_deploy_root", help="[env: SSH_DEPLOY_ROOT]")
+    ssh_group.add_argument("--ssh-host", dest="ssh_host", help="[env: SSH_HOST]")
+    ssh_group.add_argument(
+        "--ssh-port", dest="ssh_port", type=int, help="[env: SSH_PORT]"
+    )
+    ssh_group.add_argument("--ssh-user", dest="ssh_user", help="[env: SSH_USER]")
+    ssh_group.add_argument(
+        "--ssh-password", dest="ssh_password", help="[env: SSH_PASSWORD]"
+    )
+    ssh_group.add_argument(
+        "--ssh-key-file",
+        dest="ssh_key_file",
+        help="Path to private key  [env: SSH_KEY_FILE]",
+    )
+    ssh_group.add_argument(
+        "--ssh-deploy-root", dest="ssh_deploy_root", help="[env: SSH_DEPLOY_ROOT]"
+    )
 
     return parser
 
 
 def validate(args: argparse.Namespace) -> None:
     if not args.target:
-        sys.exit("Error: --target (or DEPLOY_TARGET) is required. Choose from: s3, ssh, local")
+        sys.exit(
+            "Error: --target (or DEPLOY_TARGET) is required. Choose from: s3, ssh, local"
+        )
     if not args.prefix:
         sys.exit("Error: --prefix (or DEPLOY_PREFIX) is required")
     if args.target == "s3" and not args.s3_bucket:
@@ -461,7 +504,9 @@ def validate(args: argparse.Namespace) -> None:
     if args.target == "ssh" and not args.ssh_host:
         sys.exit("Error: --ssh-host (or SSH_HOST) is required for ssh target")
     if args.target == "local" and not args.local_dest:
-        sys.exit("Error: --local-dest (or DEPLOY_LOCAL_DEST) is required for local target")
+        sys.exit(
+            "Error: --local-dest (or DEPLOY_LOCAL_DEST) is required for local target"
+        )
 
 
 def main() -> None:
@@ -469,7 +514,9 @@ def main() -> None:
 
     # Pre-parse to get --config / DEPLOY_CONFIG before setting defaults
     pre, _ = parser.parse_known_args()
-    config_path = pre.config or ("depush.yaml" if Path("depush.yaml").exists() else None)
+    config_path = pre.config or (
+        "depush.yaml" if Path("depush.yaml").exists() else None
+    )
     yaml_cfg = load_yaml_config(config_path) if config_path else {}
 
     # Merge: env vars > YAML > hardcoded defaults, then inject as argparse defaults
@@ -489,7 +536,9 @@ def main() -> None:
     print(f"Version  : {version}")
     print(f"Path     : {deploy_path}/")
     print(f"Target   : {args.target}")
-    effective_config = args.config or ("depush.yaml" if Path("depush.yaml").exists() else None)
+    effective_config = args.config or (
+        "depush.yaml" if Path("depush.yaml").exists() else None
+    )
     if effective_config:
         print(f"Config   : {effective_config}")
     if args.dry_run:
@@ -506,4 +555,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
