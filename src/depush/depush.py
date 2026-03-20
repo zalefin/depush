@@ -48,6 +48,7 @@ Environment variables:
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -338,11 +339,6 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
 
 
 def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -> None:
-    try:
-        import paramiko
-    except ImportError:
-        sys.exit("Error: paramiko is not installed. Run: pip install paramiko")
-
     ignore_spec = load_ignore_spec(codebase_dir)
     remote_root = f"{args.ssh_deploy_root}/{deploy_path}"
 
@@ -356,6 +352,58 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
             "[dry-run] Stale remote files would also be deleted (requires connection to determine)"
         )
         return
+
+    if shutil.which("rsync") and not args.ssh_password:
+        _deploy_ssh_rsync(args, codebase_dir, remote_root, ignore_spec)
+    else:
+        _deploy_ssh_paramiko(args, codebase_dir, remote_root, ignore_spec)
+
+
+def _deploy_ssh_rsync(
+    args: argparse.Namespace,
+    codebase_dir: Path,
+    remote_root: str,
+    ignore_spec,
+) -> None:
+    ssh_opts = f"ssh -p {args.ssh_port}"
+    if args.ssh_key_file:
+        ssh_opts += f" -i {args.ssh_key_file}"
+
+    cmd = [
+        "rsync",
+        "--archive",
+        "--compress",
+        "--delete",
+        "--verbose",
+        "-e",
+        ssh_opts,
+        "--exclude=depush.yaml",
+        "--exclude=.depushignore",
+    ]
+
+    ignore_file = codebase_dir / ".depushignore"
+    if ignore_file.exists():
+        cmd += [f"--exclude-from={ignore_file}"]
+
+    # Source must end with / to sync contents into the destination directory
+    cmd.append(str(codebase_dir) + "/")
+    cmd.append(f"{args.ssh_user}@{args.ssh_host}:{remote_root}/")
+
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        sys.exit(f"Error: rsync failed with exit code {result.returncode}")
+
+
+def _deploy_ssh_paramiko(
+    args: argparse.Namespace,
+    codebase_dir: Path,
+    remote_root: str,
+    ignore_spec,
+) -> None:
+    try:
+        import paramiko
+    except ImportError:
+        sys.exit("Error: paramiko is not installed. Run: pip install paramiko")
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())

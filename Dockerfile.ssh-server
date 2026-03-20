@@ -1,0 +1,32 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        openssh-server \
+        rsync \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create the admin user
+RUN useradd -m -s /bin/bash admin && \
+    echo 'admin:changeme' | chpasswd
+
+# Configure sshd: listen on 2222, enable password + pubkey auth
+RUN mkdir -p /var/run/sshd && \
+    echo 'Port 2222'               >> /etc/ssh/sshd_config && \
+    echo 'PasswordAuthentication yes'  >> /etc/ssh/sshd_config && \
+    echo 'PubkeyAuthentication yes'    >> /etc/ssh/sshd_config && \
+    echo 'PermitRootLogin no'          >> /etc/ssh/sshd_config
+
+# Install the pre-generated public key so tests can authenticate with the
+# matching private key from test-keys/depush_test_rsa on the host.
+# Run ./generate_test_keys.sh before building this image.
+COPY test-keys/depush_test_rsa.pub /tmp/depush_test_rsa.pub
+RUN mkdir -p /home/admin/.ssh && \
+    cat /tmp/depush_test_rsa.pub >> /home/admin/.ssh/authorized_keys && \
+    chown -R admin:admin /home/admin/.ssh && \
+    chmod 700 /home/admin/.ssh && \
+    chmod 600 /home/admin/.ssh/authorized_keys && \
+    rm /tmp/depush_test_rsa.pub
+
+EXPOSE 2222
+
+CMD ["/usr/sbin/sshd", "-D", "-e"]

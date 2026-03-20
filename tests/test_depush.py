@@ -782,6 +782,266 @@ class TestDeployS3Integration:
 
 
 # ---------------------------------------------------------------------------
+# deploy_ssh / _deploy_ssh_rsync / _deploy_ssh_paramiko — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestDeploySSHUnit:
+    from unittest.mock import MagicMock, patch
+
+    def test_rsync_dispatched_when_available_no_password(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_port=22,
+            ssh_user="deployer",
+            ssh_password=None,
+            ssh_key_file=None,
+            ssh_deploy_root="/deployments",
+            dry_run=False,
+        )
+        with (
+            patch(
+                "depush.depush.shutil.which", return_value="/usr/bin/rsync"
+            ) as mock_which,
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            mock_which.assert_called_with("rsync")
+            cmd = mock_run.call_args[0][0]
+            assert cmd[0] == "rsync"
+
+    def test_paramiko_dispatched_when_rsync_not_found(self, tmp_codebase):
+        from unittest.mock import patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value=None),
+            patch("depush.depush._deploy_ssh_paramiko") as mock_para,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            mock_para.assert_called_once()
+
+    def test_paramiko_dispatched_when_password_set(self, tmp_codebase):
+        from unittest.mock import patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password="secret",
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch("depush.depush._deploy_ssh_paramiko") as mock_para,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            mock_para.assert_called_once()
+
+    def test_rsync_includes_port_in_ssh_opts(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_port=2222,
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            ssh_opt = cmd[cmd.index("-e") + 1]
+            assert "-p 2222" in ssh_opt
+
+    def test_rsync_includes_key_file_in_ssh_opts(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_port=22,
+            ssh_password=None,
+            ssh_key_file="/home/user/.ssh/id_rsa",
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            ssh_opt = cmd[cmd.index("-e") + 1]
+            assert "-i /home/user/.ssh/id_rsa" in ssh_opt
+
+    def test_rsync_no_key_file_when_unset(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            ssh_opt = cmd[cmd.index("-e") + 1]
+            assert "-i " not in ssh_opt
+
+    def test_rsync_includes_exclude_from_when_depushignore_exists(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        (tmp_codebase / ".depushignore").write_text("*.log\n")
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            assert any(arg.startswith("--exclude-from=") for arg in cmd)
+
+    def test_rsync_no_exclude_from_when_no_depushignore(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            assert not any(arg.startswith("--exclude-from=") for arg in cmd)
+
+    def test_rsync_nonzero_exit_raises_system_exit(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch("depush.depush.subprocess.run", return_value=MagicMock(returncode=1)),
+        ):
+            with pytest.raises(SystemExit):
+                depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+
+    def test_rsync_source_ends_with_slash(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            assert cmd[-2].endswith("/")
+
+    def test_rsync_destination_format(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_user="deployer",
+            ssh_port=22,
+            ssh_password=None,
+            ssh_key_file=None,
+            ssh_deploy_root="/deployments",
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            assert cmd[-1] == "deployer@host.example.com:/deployments/mylib/1.0.0/"
+
+    def test_rsync_cmd_always_includes_core_flags(self, tmp_codebase):
+        from unittest.mock import MagicMock, patch
+
+        args = _make_args(
+            target="ssh",
+            ssh_host="host.example.com",
+            ssh_password=None,
+            ssh_key_file=None,
+            dry_run=False,
+        )
+        with (
+            patch("depush.depush.shutil.which", return_value="/usr/bin/rsync"),
+            patch(
+                "depush.depush.subprocess.run", return_value=MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            depush.deploy_ssh(args, tmp_codebase, "mylib/1.0.0")
+            cmd = mock_run.call_args[0][0]
+            assert "--archive" in cmd
+            assert "--compress" in cmd
+            assert "--delete" in cmd
+            assert "--verbose" in cmd
+            assert "--exclude=depush.yaml" in cmd
+            assert "--exclude=.depushignore" in cmd
+
+
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -961,5 +1221,181 @@ class TestDeploySSHIntegration:
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert any("secrets.env" in f for f in remote_files)
+
+        self._remote_cleanup(ssh_client, remote_root)
+
+
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestDeploySSHRsyncIntegration:
+    """Integration tests for the rsync-based SSH deployment path.
+
+    These tests require:
+    - ./generate_test_keys.sh has been run (creates test-keys/depush_test_rsa)
+    - docker compose build ssh-server (bakes the public key into the image)
+    - docker compose up -d (starts the container)
+    - rsync installed locally
+    """
+
+    @pytest.fixture()
+    def _paramiko(self):
+        return pytest.importorskip("paramiko")
+
+    @pytest.fixture()
+    def rsync_key(self):
+        """Return the path to the pre-generated test private key.
+
+        The key lives in test-keys/depush_test_rsa (generated by
+        ./generate_test_keys.sh).  The matching public key is baked into the
+        ssh-server image at build time, so no dynamic injection is needed.
+
+        Also refreshes the host's known_hosts entry so rsync's underlying ssh
+        accepts the container without a host-key-changed error.
+        """
+        import os
+        import shutil
+        import subprocess
+
+        if not shutil.which("rsync"):
+            pytest.skip("rsync not found in PATH")
+
+        repo_root = Path(__file__).parent.parent
+        key_path = repo_root / "test-keys" / "depush_test_rsa"
+        if not key_path.exists():
+            pytest.skip(
+                "test-keys/depush_test_rsa not found — run ./generate_test_keys.sh "
+                "then rebuild the ssh-server image"
+            )
+        key_path.chmod(0o600)
+
+        # Refresh the server's host key entry so rsync's ssh accepts it
+        subprocess.run(
+            ["ssh-keygen", "-R", f"[{SSH_HOST}]:{SSH_PORT}"],
+            capture_output=True,
+        )
+        keyscan = subprocess.run(
+            ["ssh-keyscan", "-p", str(SSH_PORT), SSH_HOST],
+            capture_output=True,
+            text=True,
+        )
+        if keyscan.returncode == 0 and keyscan.stdout:
+            ssh_dir = os.path.expanduser("~/.ssh")
+            os.makedirs(ssh_dir, exist_ok=True)
+            with open(os.path.join(ssh_dir, "known_hosts"), "a") as f:
+                f.write(keyscan.stdout)
+
+        yield key_path
+
+    @pytest.fixture()
+    def ssh_client(self, _paramiko, rsync_key):
+        """Return an open paramiko SSHClient using key-based auth (same key rsync will use)."""
+        client = _paramiko.SSHClient()
+        client.set_missing_host_key_policy(_paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                hostname=SSH_HOST,
+                port=SSH_PORT,
+                username=SSH_USER,
+                key_filename=str(rsync_key),
+            )
+        except Exception as exc:
+            pytest.skip(f"Key-based SSH failed: {exc}")
+        yield client
+        client.close()
+
+    def _remote_files(self, ssh_client, remote_dir: str) -> list[str]:
+        _, out, _ = ssh_client.exec_command(f"find '{remote_dir}' -type f 2>/dev/null")
+        lines = out.read().decode().splitlines()
+        return [l for l in lines if l]
+
+    def _remote_cleanup(self, ssh_client, remote_dir: str) -> None:
+        ssh_client.exec_command(f"rm -rf '{remote_dir}'")
+        import time
+
+        time.sleep(0.1)
+
+    def _make_rsync_args(self, rsync_key, **kwargs):
+        defaults = dict(
+            target="ssh",
+            prefix="mylib",
+            ssh_host=SSH_HOST,
+            ssh_port=SSH_PORT,
+            ssh_user=SSH_USER,
+            ssh_password=None,
+            ssh_key_file=str(rsync_key),
+            ssh_deploy_root=SSH_DEPLOY_ROOT,
+            dry_run=False,
+        )
+        defaults.update(kwargs)
+        return _make_args(**defaults)
+
+    def test_rsync_files_deployed(self, tmp_codebase, rsync_key, ssh_client):
+        deploy_path = "mylib/rsync-1.0.0"
+        remote_root = f"{SSH_DEPLOY_ROOT}/{deploy_path}"
+        self._remote_cleanup(ssh_client, remote_root)
+
+        args = self._make_rsync_args(rsync_key)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
+
+        remote_files = self._remote_files(ssh_client, remote_root)
+        assert any("main.py" in f for f in remote_files)
+        assert any("utils.py" in f for f in remote_files)
+
+        self._remote_cleanup(ssh_client, remote_root)
+
+    def test_rsync_stale_files_deleted(self, tmp_codebase, rsync_key, ssh_client):
+        deploy_path = "mylib/rsync-stale-test"
+        remote_root = f"{SSH_DEPLOY_ROOT}/{deploy_path}"
+        self._remote_cleanup(ssh_client, remote_root)
+
+        # Pre-place a stale file on remote
+        ssh_client.exec_command(
+            f"mkdir -p '{remote_root}' && echo stale > '{remote_root}/stale.py'"
+        )
+        import time
+
+        time.sleep(0.3)
+
+        args = self._make_rsync_args(rsync_key)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
+
+        remote_files = self._remote_files(ssh_client, remote_root)
+        assert not any(
+            "stale.py" in f for f in remote_files
+        ), "rsync --delete should have removed stale.py"
+
+        self._remote_cleanup(ssh_client, remote_root)
+
+    def test_rsync_idempotent_redeploy(self, tmp_codebase, rsync_key, ssh_client):
+        deploy_path = "mylib/rsync-idempotent"
+        remote_root = f"{SSH_DEPLOY_ROOT}/{deploy_path}"
+        self._remote_cleanup(ssh_client, remote_root)
+
+        args = self._make_rsync_args(rsync_key)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
+        depush.deploy_ssh(
+            args, tmp_codebase, deploy_path
+        )  # second call should not error
+
+        remote_files = self._remote_files(ssh_client, remote_root)
+        assert any("main.py" in f for f in remote_files)
+
+        self._remote_cleanup(ssh_client, remote_root)
+
+    def test_rsync_ignored_file_not_uploaded(self, tmp_codebase, rsync_key, ssh_client):
+        deploy_path = "mylib/rsync-ignore-test"
+        remote_root = f"{SSH_DEPLOY_ROOT}/{deploy_path}"
+        self._remote_cleanup(ssh_client, remote_root)
+
+        (tmp_codebase / ".depushignore").write_text("*.py\n")
+        args = self._make_rsync_args(rsync_key)
+        depush.deploy_ssh(args, tmp_codebase, deploy_path)
+
+        remote_files = self._remote_files(ssh_client, remote_root)
+        assert not any(
+            f.endswith(".py") for f in remote_files
+        ), ".py files should be excluded by .depushignore"
 
         self._remote_cleanup(ssh_client, remote_root)
