@@ -1,0 +1,39 @@
+# deploy-config.yaml — example configuration for deploy.py
+#
+# CLI flags override these values; environment variables also override them.
+# Precedence: CLI flag > environment variable > this file > hardcoded default
+
+# ---------------------------------------------------------------------------
+# General (required)
+# ---------------------------------------------------------------------------
+target: s3           # s3 | ssh | local
+prefix: mylib        # deployed to: {prefix}/{version}/
+codebase_dir: ../codebase
+dry_run: false
+
+# ---------------------------------------------------------------------------
+# Local directory  (used when target: local)
+# ---------------------------------------------------------------------------
+local:
+  dest: ./dist
+
+# ---------------------------------------------------------------------------
+# S3 / MinIO  (used when target: s3)
+# ---------------------------------------------------------------------------
+s3:
+  bucket: deployments
+  endpoint: http://localhost:9000   # omit for AWS
+  region: us-east-1
+  access_key: admin
+  secret_key: admin
+
+# ---------------------------------------------------------------------------
+# SSH  (used when target: ssh)
+# ---------------------------------------------------------------------------
+ssh:
+  host: localhost
+  port: 2222
+  user: admin
+  password: changeme
+  # key_file: ~/.ssh/id_rsa         # alternative to password
+  deploy_root: /deployments
