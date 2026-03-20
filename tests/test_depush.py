@@ -81,6 +81,7 @@ def _make_args(**kwargs) -> argparse.Namespace:
         s3_bucket=None,
         s3_endpoint=None,
         s3_region="us-east-1",
+        s3_profile=None,
         s3_access_key=None,
         s3_secret_key=None,
         ssh_host=None,
@@ -132,6 +133,17 @@ class TestLoadYamlConfig:
         assert cfg["s3_region"] == "eu-west-1"
         assert cfg["s3_access_key"] == "AKID"
         assert cfg["s3_secret_key"] == "SECRET"
+
+    def test_s3_profile_key(self, cfg_file):
+        p = cfg_file(
+            """\
+            s3:
+              bucket: my-bucket
+              profile: my-aws-profile
+            """
+        )
+        cfg = depush.load_yaml_config(str(p))
+        assert cfg["s3_profile"] == "my-aws-profile"
 
     def test_ssh_section(self, cfg_file):
         p = cfg_file(
@@ -199,6 +211,11 @@ class TestResolveDefaults:
     def test_yaml_overrides_hardcoded(self):
         merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})
         assert merged["s3_region"] == "ap-southeast-1"
+
+    def test_s3_profile_env_var(self, monkeypatch):
+        monkeypatch.setenv("S3_PROFILE", "ci-profile")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_profile"] == "ci-profile"
 
     def test_env_overrides_yaml(self, monkeypatch):
         monkeypatch.setenv("S3_REGION", "eu-central-1")
@@ -513,6 +530,62 @@ class TestBuildParser:
 
 
 # ---------------------------------------------------------------------------
+# deploy_s3 — unit tests (boto3 mocked)
+# ---------------------------------------------------------------------------
+
+
+class TestDeployS3Unit:
+    def test_profile_passed_to_session(self, tmp_codebase, monkeypatch):
+        """deploy_s3 should pass s3_profile as profile_name to boto3.Session."""
+        import unittest.mock as mock
+
+        mock_s3 = mock.MagicMock()
+        mock_session = mock.MagicMock()
+        mock_session.client.return_value = mock_s3
+        mock_s3.get_paginator.return_value.paginate.return_value = []
+
+        with mock.patch("boto3.Session", return_value=mock_session) as mock_session_cls:
+            args = _make_args(
+                target="s3",
+                s3_bucket="my-bucket",
+                s3_profile="my-aws-profile",
+                dry_run=False,
+            )
+            depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+
+        mock_session_cls.assert_called_once_with(
+            profile_name="my-aws-profile",
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
+            region_name="us-east-1",
+        )
+
+    def test_no_profile_uses_none(self, tmp_codebase):
+        """When no profile is specified, profile_name should be None (use default chain)."""
+        import unittest.mock as mock
+
+        mock_s3 = mock.MagicMock()
+        mock_session = mock.MagicMock()
+        mock_session.client.return_value = mock_s3
+        mock_s3.get_paginator.return_value.paginate.return_value = []
+
+        with mock.patch("boto3.Session", return_value=mock_session) as mock_session_cls:
+            args = _make_args(
+                target="s3",
+                s3_bucket="my-bucket",
+                dry_run=False,
+            )
+            depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
+
+        mock_session_cls.assert_called_once_with(
+            profile_name=None,
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
+            region_name="us-east-1",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Integration — MinIO (S3)
 # ---------------------------------------------------------------------------
 
@@ -631,7 +704,9 @@ class TestDeployS3Integration:
             dry_run=False,
         )
         depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")
-        depush.deploy_s3(args, tmp_codebase, "mylib/1.2.3")  # second deploy should not error
+        depush.deploy_s3(
+            args, tmp_codebase, "mylib/1.2.3"
+        )  # second deploy should not error
 
         keys = [
             obj["Key"]
@@ -815,7 +890,9 @@ class TestDeploySSHIntegration:
             dry_run=False,
         )
         depush.deploy_ssh(args, tmp_codebase, deploy_path)
-        depush.deploy_ssh(args, tmp_codebase, deploy_path)  # second call should not error
+        depush.deploy_ssh(
+            args, tmp_codebase, deploy_path
+        )  # second call should not error
 
         remote_files = self._remote_files(ssh_client, remote_root)
         assert any("main.py" in f for f in remote_files)

@@ -76,6 +76,7 @@ ENV_MAP: dict[str, str] = {
     "s3_bucket": "S3_BUCKET",
     "s3_endpoint": "S3_ENDPOINT",
     "s3_region": "S3_REGION",
+    "s3_profile": "S3_PROFILE",
     "s3_access_key": "S3_ACCESS_KEY",
     "s3_secret_key": "S3_SECRET_KEY",
     "ssh_host": "SSH_HOST",
@@ -120,6 +121,7 @@ def load_yaml_config(path: str) -> dict:
             "bucket": "s3_bucket",
             "endpoint": "s3_endpoint",
             "region": "s3_region",
+            "profile": "s3_profile",
             "access_key": "s3_access_key",
             "secret_key": "s3_secret_key",
         },
@@ -272,16 +274,18 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
 
     ignore_spec = load_ignore_spec(codebase_dir)
 
-    client_kwargs: dict = {
-        "aws_access_key_id": args.s3_access_key or None,
-        "aws_secret_access_key": args.s3_secret_key or None,
-        "region_name": args.s3_region,
-    }
+    session = boto3.Session(
+        profile_name=args.s3_profile or None,
+        aws_access_key_id=args.s3_access_key or None,
+        aws_secret_access_key=args.s3_secret_key or None,
+        region_name=args.s3_region,
+    )
+    client_kwargs: dict = {}
     if args.s3_endpoint:
         client_kwargs["endpoint_url"] = args.s3_endpoint
         client_kwargs["config"] = Config(signature_version="s3v4")
 
-    s3 = boto3.client("s3", **client_kwargs)
+    s3 = session.client("s3", **client_kwargs)
 
     files = collect_files(codebase_dir, ignore_spec)
     if not files:
@@ -463,6 +467,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Custom endpoint URL for MinIO  [env: S3_ENDPOINT]",
     )
     s3_group.add_argument("--s3-region", dest="s3_region", help="[env: S3_REGION]")
+    s3_group.add_argument(
+        "--s3-profile",
+        dest="s3_profile",
+        help="AWS credentials profile name  [env: S3_PROFILE]",
+    )
     s3_group.add_argument(
         "--s3-access-key", dest="s3_access_key", help="[env: S3_ACCESS_KEY]"
     )
