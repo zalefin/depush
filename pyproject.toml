@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "depush"
-version = "0.2.0"
+version = "0.3.0"
 description = "Deploy a versioned codebase to S3/MinIO, SSH, or a local directory"
 authors = [
     { name = "Zachary Lefin"}

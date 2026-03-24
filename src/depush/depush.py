@@ -23,6 +23,7 @@ Environment variables:
     DEPUSH_DEPLOY_TARGET          Deployment target: s3, ssh, or local (required)
     DEPUSH_DEPLOY_PREFIX          Path prefix, e.g. 'mylib' -> 'mylib/{version}/' (required)
     DEPUSH_DEPLOY_CODEBASE_DIR    Path to codebase directory containing a 'version' file (default: .)
+    DEPUSH_VERSION_OVERRIDE        Override the deployment version; the version file is not required when set
     DEPUSH_DEPLOY_DRY_RUN         Set to '1', 'true', or 'yes' to preview without uploading
     DEPUSH_DEPLOY_CONFIG          Path to a YAML config file (default: depush.yaml in CWD if present)
 
@@ -72,6 +73,7 @@ ENV_MAP = {
     "target": "DEPUSH_DEPLOY_TARGET",
     "prefix": "DEPUSH_DEPLOY_PREFIX",
     "codebase_dir": "DEPUSH_DEPLOY_CODEBASE_DIR",
+    "version_override": "DEPUSH_VERSION_OVERRIDE",
     "dry_run": "DEPUSH_DEPLOY_DRY_RUN",
     "local_dest": "DEPUSH_DEPLOY_LOCAL_DEST",
     "s3_bucket": "DEPUSH_S3_BUCKET",
@@ -111,7 +113,7 @@ def load_yaml_config(path):
     flat = {}
 
     # Top-level general keys
-    for key in ("target", "prefix", "codebase_dir", "dry_run"):
+    for key in ("target", "prefix", "codebase_dir", "version_override", "dry_run"):
         if key in raw:
             flat[key] = raw[key]
 
@@ -504,6 +506,11 @@ def build_parser():
         help="Path to codebase directory containing a 'version' file (default: .)  [env: DEPUSH_DEPLOY_CODEBASE_DIR]",
     )
     parser.add_argument(
+        "--version-override",
+        dest="version_override",
+        help="Override the deployment version; the version file is not required when set  [env: DEPUSH_VERSION_OVERRIDE]",
+    )
+    parser.add_argument(
         "--dry-run",
         dest="dry_run",
         action="store_true",
@@ -606,7 +613,10 @@ def main():
     if not codebase_dir.is_dir():
         sys.exit(f"Error: codebase directory not found: {codebase_dir}")
 
-    version = read_version(codebase_dir)
+    if args.version_override:
+        version = args.version_override
+    else:
+        version = read_version(codebase_dir)
     deploy_path = f"{args.prefix}/{version}"
 
     print(f"Version  : {version}")

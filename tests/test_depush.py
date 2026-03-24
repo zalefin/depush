@@ -75,6 +75,7 @@ def _make_args(**kwargs) -> argparse.Namespace:
         target="local",
         prefix="mylib",
         codebase_dir=".",
+        version_override=None,
         dry_run=False,
         config=None,
         local_dest=None,
@@ -582,6 +583,169 @@ class TestBuildParser:
         parser = depush.build_parser()
         with pytest.raises(SystemExit):
             parser.parse_args(["--target", "ftp"])
+
+    def test_parses_version_override_flag(self):
+        parser = depush.build_parser()
+        args = parser.parse_args(["--version-override", "custom-99"])
+        assert args.version_override == "custom-99"
+
+    def test_version_override_absent_defaults_none(self):
+        parser = depush.build_parser()
+        args = parser.parse_args([])
+        assert args.version_override is None
+
+
+# ---------------------------------------------------------------------------
+# version_override
+# ---------------------------------------------------------------------------
+
+
+class TestVersionOverride:
+    """Tests for the --version-override / DEPUSH_VERSION_OVERRIDE feature."""
+
+    # -- load_yaml_config ------------------------------------------------------
+
+    def test_yaml_version_override_key(self, cfg_file):
+        p = cfg_file(
+            """\
+            version_override: "42.0.0"
+            """
+        )
+        cfg = depush.load_yaml_config(str(p))
+        assert cfg["version_override"] == "42.0.0"
+
+    # -- resolve_defaults ------------------------------------------------------
+
+    def test_env_var_sets_version_override(self, monkeypatch):
+        monkeypatch.setenv("DEPUSH_VERSION_OVERRIDE", "99.0.0")
+        merged = depush.resolve_defaults({})
+        assert merged["version_override"] == "99.0.0"
+
+    def test_env_var_absent_leaves_key_unset(self, monkeypatch):
+        monkeypatch.delenv("DEPUSH_VERSION_OVERRIDE", raising=False)
+        merged = depush.resolve_defaults({})
+        # Key should be absent or falsy — no accidental override
+        assert not merged.get("version_override")
+
+    def test_env_var_overrides_yaml(self, monkeypatch):
+        monkeypatch.setenv("DEPUSH_VERSION_OVERRIDE", "from-env")
+        merged = depush.resolve_defaults({"version_override": "from-yaml"})
+        assert merged["version_override"] == "from-env"
+
+    # -- main() ----------------------------------------------------------------
+
+    def test_main_uses_version_override_without_version_file(
+        self, tmp_path, monkeypatch
+    ):
+        """main() deploys using version_override even when no version file exists."""
+        import unittest.mock as mock
+
+        cb = tmp_path / "codebase"
+        cb.mkdir()
+        (cb / "app.py").write_text("x = 1\n")
+        # Deliberately no 'version' file
+        dest = tmp_path / "dist"
+        monkeypatch.chdir(tmp_path)  # avoid picking up any real depush.yaml
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "depush",
+                "--target",
+                "local",
+                "--prefix",
+                "mylib",
+                "--codebase-dir",
+                str(cb),
+                "--local-dest",
+                str(dest),
+                "--version-override",
+                "v99",
+            ],
+        )
+        depush.main()  # must not sys.exit despite missing version file
+        assert (dest / "mylib" / "v99" / "app.py").exists()
+
+    def test_main_version_override_used_in_deploy_path(self, tmp_path, monkeypatch):
+        """The overridden version string appears verbatim in the deploy path."""
+        import unittest.mock as mock
+
+        cb = tmp_path / "codebase"
+        cb.mkdir()
+        (cb / "version").write_text("1.0.0\n")  # should NOT be used
+        (cb / "app.py").write_text("x = 1\n")
+        dest = tmp_path / "dist"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "depush",
+                "--target",
+                "local",
+                "--prefix",
+                "mylib",
+                "--codebase-dir",
+                str(cb),
+                "--local-dest",
+                str(dest),
+                "--version-override",
+                "override-build",
+            ],
+        )
+        depush.main()
+        # Must land under the override path, not the version-file value
+        assert (dest / "mylib" / "override-build" / "app.py").exists()
+        assert not (dest / "mylib" / "1.0.0").exists()
+
+    def test_main_without_override_reads_version_file(self, tmp_path, monkeypatch):
+        """Without version_override, main() reads the version file as normal."""
+        cb = tmp_path / "codebase"
+        cb.mkdir()
+        (cb / "version").write_text("3.7.2\n")
+        (cb / "app.py").write_text("x = 1\n")
+        dest = tmp_path / "dist"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "depush",
+                "--target",
+                "local",
+                "--prefix",
+                "mylib",
+                "--codebase-dir",
+                str(cb),
+                "--local-dest",
+                str(dest),
+            ],
+        )
+        depush.main()
+        assert (dest / "mylib" / "3.7.2" / "app.py").exists()
+
+    def test_main_without_override_exits_on_missing_version_file(
+        self, tmp_path, monkeypatch
+    ):
+        """Without version_override, main() exits when the version file is absent."""
+        cb = tmp_path / "codebase"
+        cb.mkdir()
+        (cb / "app.py").write_text("x = 1\n")  # no version file
+        dest = tmp_path / "dist"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "depush",
+                "--target",
+                "local",
+                "--prefix",
+                "mylib",
+                "--codebase-dir",
+                str(cb),
+                "--local-dest",
+                str(dest),
+            ],
+        )
+        with pytest.raises(SystemExit):
+            depush.main()
 
 
 # ---------------------------------------------------------------------------
