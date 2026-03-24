@@ -2,7 +2,7 @@
 
 Deploy a versioned codebase directory to **S3/MinIO**, **SSH**, or a **local directory**.
 
-depush reads a `version` file from your codebase directory and deploys all files to `{prefix}/{version}/` at the destination. Stale files at the destination that no longer exist in the source are automatically deleted, keeping deployments in sync.
+depush reads a `version` file from your codebase directory and deploys all files to `{prefix}/{version}/` at the destination. Stale files at the destination that no longer exist in the source are automatically deleted, keeping deployments in sync. You can also override the version string at deploy time without touching the `version` file.
 
 Configuration is flexible: use CLI flags, environment variables, or a YAML config file. Precedence (highest to lowest): **CLI flag > environment variable > YAML config > default**.
 
@@ -32,6 +32,8 @@ my-project/
 ├── main.py
 └── ...
 ```
+
+If you supply `--version-override` (or `DEPUSH_VERSION_OVERRIDE`), the `version` file is optional and its value is ignored.
 
 ### Deploy to S3 / MinIO
 
@@ -72,6 +74,17 @@ Add `--dry-run` to any command to preview what would be deployed without making 
 depush --target s3 --prefix mylib --s3-bucket deployments --dry-run
 ```
 
+### Override the version
+
+Pass `--version-override` to use a custom version string instead of reading the `version` file. The file does not need to exist when this flag is set:
+
+```bash
+depush --target local --prefix mylib --local-dest /srv/releases \
+  --version-override "$(git rev-parse --short HEAD)"
+```
+
+Files are deployed to `/srv/releases/mylib/<git-sha>/`.
+
 ---
 
 ## Configuration file
@@ -82,7 +95,9 @@ Place a `depush.yaml` in the current directory (or pass `--config path/to/file.y
 target: s3
 prefix: mylib
 codebase_dir: ./codebase
-dry_run: false
+# dry_run: false
+# version_override: "v1-hello"    # optional; overrides the version file when set
+                        # empty string (or omitting the key) falls back to reading the version file
 
 s3:
   bucket: deployments
@@ -113,6 +128,7 @@ All options can also be set via environment variables:
 | `DEPUSH_DEPLOY_TARGET` | Deployment target: `s3`, `ssh`, or `local` | *(required)* |
 | `DEPUSH_DEPLOY_PREFIX` | Path prefix, e.g. `mylib` → `mylib/{version}/` | *(required)* |
 | `DEPUSH_DEPLOY_CODEBASE_DIR` | Path to codebase directory | `.` |
+| `DEPUSH_VERSION_OVERRIDE` | Override the deployment version; `version` file not required when set. An empty string is treated as unset and falls back to the `version` file. | |
 | `DEPUSH_DEPLOY_DRY_RUN` | Set to `1`, `true`, or `yes` to preview | `false` |
 | `DEPUSH_DEPLOY_CONFIG` | Path to a YAML config file | `depush.yaml` if present |
 | `DEPUSH_DEPLOY_LOCAL_DEST` | Root destination for local deployments | `./dist` |
