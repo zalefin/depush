@@ -32,7 +32,7 @@ Environment variables:
   S3 / MinIO:
     S3_BUCKET              Bucket name (required for s3 target)
     S3_ENDPOINT            Custom endpoint URL for MinIO, e.g. http://localhost:9000
-    S3_REGION              AWS region (default: us-east-1)
+    S3_REGION              AWS region (default: us-east-1)  (alias: AWS_DEFAULT_REGION)
     S3_ACCESS_KEY          Access key / MinIO username  (alias: AWS_ACCESS_KEY_ID)
     S3_SECRET_KEY          Secret key / MinIO password  (alias: AWS_SECRET_ACCESS_KEY)
 
@@ -178,6 +178,13 @@ def resolve_defaults(yaml_cfg):
         aws_profile = os.environ.get("AWS_PROFILE")
         if aws_profile:
             merged["s3_profile"] = aws_profile
+
+    # AWS_DEFAULT_REGION is the standard AWS env var; use it as a fallback when
+    # S3_REGION is not set via env var or YAML config (only overrides the hardcoded default).
+    if not os.environ.get("S3_REGION") and "s3_region" not in yaml_cfg:
+        val = os.environ.get("AWS_DEFAULT_REGION")
+        if val:
+            merged["s3_region"] = val
 
     # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are the standard AWS env vars;
     # use them as fallbacks when S3_ACCESS_KEY / S3_SECRET_KEY are not set.

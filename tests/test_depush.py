@@ -282,6 +282,24 @@ class TestResolveDefaults:
         merged = depush.resolve_defaults({})
         assert merged["s3_secret_key"] == "explicit-secret"
 
+    def test_aws_default_region_fallback(self, monkeypatch):
+        monkeypatch.delenv("S3_REGION", raising=False)
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_region"] == "eu-west-1"
+
+    def test_s3_region_takes_precedence_over_aws_default_region(self, monkeypatch):
+        monkeypatch.setenv("S3_REGION", "us-west-2")
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_region"] == "us-west-2"
+
+    def test_yaml_region_takes_precedence_over_aws_default_region(self, monkeypatch):
+        monkeypatch.delenv("S3_REGION", raising=False)
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
+        merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})
+        assert merged["s3_region"] == "ap-southeast-1"
+
 
 # ---------------------------------------------------------------------------
 # read_version
