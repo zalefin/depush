@@ -6,6 +6,10 @@ build-backend = "hatchling.build"
 name = "depush"
 version = "0.1.0"
 description = "Deploy a versioned codebase to S3/MinIO, SSH, or a local directory"
+authors = [
+    { name = "Zachary Lefin"}
+]
+urls = { Homepage = "https://github.com/zalefin/depush" }
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "GPL-2.0-only" }
