@@ -213,7 +213,7 @@ class TestResolveDefaults:
         assert merged["s3_region"] == "ap-southeast-1"
 
     def test_s3_profile_env_var(self, monkeypatch):
-        monkeypatch.setenv("S3_PROFILE", "ci-profile")
+        monkeypatch.setenv("DEPUSH_S3_PROFILE", "ci-profile")
         merged = depush.resolve_defaults({})
         assert merged["s3_profile"] == "ci-profile"
 
@@ -223,47 +223,47 @@ class TestResolveDefaults:
         assert merged["s3_profile"] == "default-aws-profile"
 
     def test_s3_profile_takes_precedence_over_aws_profile(self, monkeypatch):
-        monkeypatch.setenv("S3_PROFILE", "explicit-profile")
+        monkeypatch.setenv("DEPUSH_S3_PROFILE", "explicit-profile")
         monkeypatch.setenv("AWS_PROFILE", "default-aws-profile")
         merged = depush.resolve_defaults({})
         assert merged["s3_profile"] == "explicit-profile"
 
     def test_env_overrides_yaml(self, monkeypatch):
-        monkeypatch.setenv("S3_REGION", "eu-central-1")
+        monkeypatch.setenv("DEPUSH_S3_REGION", "eu-central-1")
         merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})
         assert merged["s3_region"] == "eu-central-1"
 
     def test_env_bool_dry_run(self, monkeypatch):
         for truthy in ("1", "true", "yes", "TRUE", "YES"):
-            monkeypatch.setenv("DEPLOY_DRY_RUN", truthy)
+            monkeypatch.setenv("DEPUSH_DEPLOY_DRY_RUN", truthy)
             assert depush.resolve_defaults({})["dry_run"] is True
 
         for falsy in ("0", "false", "no"):
-            monkeypatch.setenv("DEPLOY_DRY_RUN", falsy)
+            monkeypatch.setenv("DEPUSH_DEPLOY_DRY_RUN", falsy)
             assert depush.resolve_defaults({})["dry_run"] is False
 
     def test_env_ssh_port_int(self, monkeypatch):
-        monkeypatch.setenv("SSH_PORT", "2222")
+        monkeypatch.setenv("DEPUSH_SSH_PORT", "2222")
         assert depush.resolve_defaults({})["ssh_port"] == 2222
 
     def test_env_ssh_port_invalid_exits(self, monkeypatch):
-        monkeypatch.setenv("SSH_PORT", "not-a-number")
+        monkeypatch.setenv("DEPUSH_SSH_PORT", "not-a-number")
         with pytest.raises(SystemExit):
             depush.resolve_defaults({})
 
     def test_env_not_set_does_not_override(self, monkeypatch):
-        monkeypatch.delenv("SSH_PORT", raising=False)
+        monkeypatch.delenv("DEPUSH_SSH_PORT", raising=False)
         merged = depush.resolve_defaults({"ssh_port": 9999})
         assert merged["ssh_port"] == 9999
 
     def test_aws_access_key_id_fallback(self, monkeypatch):
-        monkeypatch.delenv("S3_ACCESS_KEY", raising=False)
+        monkeypatch.delenv("DEPUSH_S3_ACCESS_KEY", raising=False)
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
         merged = depush.resolve_defaults({})
         assert merged["s3_access_key"] == "AKIAIOSFODNN7EXAMPLE"
 
     def test_aws_secret_access_key_fallback(self, monkeypatch):
-        monkeypatch.delenv("S3_SECRET_KEY", raising=False)
+        monkeypatch.delenv("DEPUSH_S3_SECRET_KEY", raising=False)
         monkeypatch.setenv(
             "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
         )
@@ -271,31 +271,31 @@ class TestResolveDefaults:
         assert merged["s3_secret_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
     def test_s3_access_key_takes_precedence_over_aws(self, monkeypatch):
-        monkeypatch.setenv("S3_ACCESS_KEY", "explicit-key")
+        monkeypatch.setenv("DEPUSH_S3_ACCESS_KEY", "explicit-key")
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fallback-key")
         merged = depush.resolve_defaults({})
         assert merged["s3_access_key"] == "explicit-key"
 
     def test_s3_secret_key_takes_precedence_over_aws(self, monkeypatch):
-        monkeypatch.setenv("S3_SECRET_KEY", "explicit-secret")
+        monkeypatch.setenv("DEPUSH_S3_SECRET_KEY", "explicit-secret")
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fallback-secret")
         merged = depush.resolve_defaults({})
         assert merged["s3_secret_key"] == "explicit-secret"
 
     def test_aws_default_region_fallback(self, monkeypatch):
-        monkeypatch.delenv("S3_REGION", raising=False)
+        monkeypatch.delenv("DEPUSH_S3_REGION", raising=False)
         monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
         merged = depush.resolve_defaults({})
         assert merged["s3_region"] == "eu-west-1"
 
     def test_s3_region_takes_precedence_over_aws_default_region(self, monkeypatch):
-        monkeypatch.setenv("S3_REGION", "us-west-2")
+        monkeypatch.setenv("DEPUSH_S3_REGION", "us-west-2")
         monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
         merged = depush.resolve_defaults({})
         assert merged["s3_region"] == "us-west-2"
 
     def test_yaml_region_takes_precedence_over_aws_default_region(self, monkeypatch):
-        monkeypatch.delenv("S3_REGION", raising=False)
+        monkeypatch.delenv("DEPUSH_S3_REGION", raising=False)
         monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
         merged = depush.resolve_defaults({"s3_region": "ap-southeast-1"})
         assert merged["s3_region"] == "ap-southeast-1"

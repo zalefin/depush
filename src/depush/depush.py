@@ -13,36 +13,36 @@ Usage (local):
 
 Usage (Docker):
   docker run --rm -v ./codebase:/codebase \\
-    -e DEPLOY_TARGET=s3 -e DEPLOY_PREFIX=mylib \\
-    -e S3_BUCKET=deployments -e S3_ENDPOINT=http://minio:9000 \\
-    -e S3_ACCESS_KEY=admin -e S3_SECRET_KEY=admin \\
+    -e DEPUSH_DEPLOY_TARGET=s3 -e DEPUSH_DEPLOY_PREFIX=mylib \\
+    -e DEPUSH_S3_BUCKET=deployments -e DEPUSH_S3_ENDPOINT=http://minio:9000 \\
+    -e DEPUSH_S3_ACCESS_KEY=admin -e DEPUSH_S3_SECRET_KEY=admin \\
     tfdeploy-deploy
 
 Environment variables:
   General:
-    DEPLOY_TARGET          Deployment target: s3, ssh, or local (required)
-    DEPLOY_PREFIX          Path prefix, e.g. 'mylib' -> 'mylib/{version}/' (required)
-    DEPLOY_CODEBASE_DIR    Path to codebase directory containing a 'version' file (default: .)
-    DEPLOY_DRY_RUN         Set to '1', 'true', or 'yes' to preview without uploading
-    DEPLOY_CONFIG          Path to a YAML config file (default: depush.yaml in CWD if present)
+    DEPUSH_DEPLOY_TARGET          Deployment target: s3, ssh, or local (required)
+    DEPUSH_DEPLOY_PREFIX          Path prefix, e.g. 'mylib' -> 'mylib/{version}/' (required)
+    DEPUSH_DEPLOY_CODEBASE_DIR    Path to codebase directory containing a 'version' file (default: .)
+    DEPUSH_DEPLOY_DRY_RUN         Set to '1', 'true', or 'yes' to preview without uploading
+    DEPUSH_DEPLOY_CONFIG          Path to a YAML config file (default: depush.yaml in CWD if present)
 
   Local directory:
-    DEPLOY_LOCAL_DEST      Root destination directory for local deployments (default: ./dist)
+    DEPUSH_DEPLOY_LOCAL_DEST      Root destination directory for local deployments (default: ./dist)
 
   S3 / MinIO:
-    S3_BUCKET              Bucket name (required for s3 target)
-    S3_ENDPOINT            Custom endpoint URL for MinIO, e.g. http://localhost:9000
-    S3_REGION              AWS region (default: us-east-1)  (alias: AWS_DEFAULT_REGION)
-    S3_ACCESS_KEY          Access key / MinIO username  (alias: AWS_ACCESS_KEY_ID)
-    S3_SECRET_KEY          Secret key / MinIO password  (alias: AWS_SECRET_ACCESS_KEY)
+    DEPUSH_S3_BUCKET              Bucket name (required for s3 target)
+    DEPUSH_S3_ENDPOINT            Custom endpoint URL for MinIO, e.g. http://localhost:9000
+    DEPUSH_S3_REGION              AWS region (default: us-east-1)  (alias: AWS_DEFAULT_REGION)
+    DEPUSH_S3_ACCESS_KEY          Access key / MinIO username  (alias: AWS_ACCESS_KEY_ID)
+    DEPUSH_S3_SECRET_KEY          Secret key / MinIO password  (alias: AWS_SECRET_ACCESS_KEY)
 
   SSH:
-    SSH_HOST               SSH server hostname or IP (required for ssh target)
-    SSH_PORT               SSH port (default: 22)
-    SSH_USER               SSH username (default: admin)
-    SSH_PASSWORD           SSH password (leave unset to use key-based auth)
-    SSH_KEY_FILE           Path to private key file
-    SSH_DEPLOY_ROOT        Absolute path on the remote server (default: /deployments)
+    DEPUSH_SSH_HOST               SSH server hostname or IP (required for ssh target)
+    DEPUSH_SSH_PORT               SSH port (default: 22)
+    DEPUSH_SSH_USER               SSH username (default: admin)
+    DEPUSH_SSH_PASSWORD           SSH password (leave unset to use key-based auth)
+    DEPUSH_SSH_KEY_FILE           Path to private key file
+    DEPUSH_SSH_DEPLOY_ROOT        Absolute path on the remote server (default: /deployments)
 """
 
 import argparse
@@ -69,23 +69,23 @@ DEFAULTS = {
 
 # Mapping from argparse dest -> environment variable name
 ENV_MAP = {
-    "target": "DEPLOY_TARGET",
-    "prefix": "DEPLOY_PREFIX",
-    "codebase_dir": "DEPLOY_CODEBASE_DIR",
-    "dry_run": "DEPLOY_DRY_RUN",
-    "local_dest": "DEPLOY_LOCAL_DEST",
-    "s3_bucket": "S3_BUCKET",
-    "s3_endpoint": "S3_ENDPOINT",
-    "s3_region": "S3_REGION",
-    "s3_profile": "S3_PROFILE",
-    "s3_access_key": "S3_ACCESS_KEY",
-    "s3_secret_key": "S3_SECRET_KEY",
-    "ssh_host": "SSH_HOST",
-    "ssh_port": "SSH_PORT",
-    "ssh_user": "SSH_USER",
-    "ssh_password": "SSH_PASSWORD",
-    "ssh_key_file": "SSH_KEY_FILE",
-    "ssh_deploy_root": "SSH_DEPLOY_ROOT",
+    "target": "DEPUSH_DEPLOY_TARGET",
+    "prefix": "DEPUSH_DEPLOY_PREFIX",
+    "codebase_dir": "DEPUSH_DEPLOY_CODEBASE_DIR",
+    "dry_run": "DEPUSH_DEPLOY_DRY_RUN",
+    "local_dest": "DEPUSH_DEPLOY_LOCAL_DEST",
+    "s3_bucket": "DEPUSH_S3_BUCKET",
+    "s3_endpoint": "DEPUSH_S3_ENDPOINT",
+    "s3_region": "DEPUSH_S3_REGION",
+    "s3_profile": "DEPUSH_S3_PROFILE",
+    "s3_access_key": "DEPUSH_S3_ACCESS_KEY",
+    "s3_secret_key": "DEPUSH_S3_SECRET_KEY",
+    "ssh_host": "DEPUSH_SSH_HOST",
+    "ssh_port": "DEPUSH_SSH_PORT",
+    "ssh_user": "DEPUSH_SSH_USER",
+    "ssh_password": "DEPUSH_SSH_PASSWORD",
+    "ssh_key_file": "DEPUSH_SSH_KEY_FILE",
+    "ssh_deploy_root": "DEPUSH_SSH_DEPLOY_ROOT",
 }
 
 
@@ -173,21 +173,21 @@ def resolve_defaults(yaml_cfg):
             merged[dest] = raw
 
     # AWS_PROFILE is a widely-used standard env var; use it as a fallback for
-    # s3_profile when neither S3_PROFILE nor a YAML/CLI value was provided.
+    # s3_profile when neither DEPUSH_S3_PROFILE nor a YAML/CLI value was provided.
     if "s3_profile" not in merged:
         aws_profile = os.environ.get("AWS_PROFILE")
         if aws_profile:
             merged["s3_profile"] = aws_profile
 
     # AWS_DEFAULT_REGION is the standard AWS env var; use it as a fallback when
-    # S3_REGION is not set via env var or YAML config (only overrides the hardcoded default).
-    if not os.environ.get("S3_REGION") and "s3_region" not in yaml_cfg:
+    # DEPUSH_S3_REGION is not set via env var or YAML config (only overrides the hardcoded default).
+    if not os.environ.get("DEPUSH_S3_REGION") and "s3_region" not in yaml_cfg:
         val = os.environ.get("AWS_DEFAULT_REGION")
         if val:
             merged["s3_region"] = val
 
     # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are the standard AWS env vars;
-    # use them as fallbacks when S3_ACCESS_KEY / S3_SECRET_KEY are not set.
+    # use them as fallbacks when DEPUSH_S3_ACCESS_KEY / DEPUSH_S3_SECRET_KEY are not set.
     if "s3_access_key" not in merged:
         val = os.environ.get("AWS_ACCESS_KEY_ID")
         if val:
@@ -485,30 +485,30 @@ def build_parser():
 
     parser.add_argument(
         "--config",
-        default=os.environ.get("DEPLOY_CONFIG"),
+        default=os.environ.get("DEPUSH_DEPLOY_CONFIG"),
         metavar="FILE",
-        help="Path to a YAML config file  [env: DEPLOY_CONFIG]",
+        help="Path to a YAML config file  [env: DEPUSH_DEPLOY_CONFIG]",
     )
     parser.add_argument(
         "--target",
         choices=["s3", "ssh", "local"],
-        help="Deployment target (required)  [env: DEPLOY_TARGET]",
+        help="Deployment target (required)  [env: DEPUSH_DEPLOY_TARGET]",
     )
     parser.add_argument(
         "--prefix",
-        help="Path prefix, e.g. 'mylib' -> 'mylib/{version}/'  [env: DEPLOY_PREFIX]",
+        help="Path prefix, e.g. 'mylib' -> 'mylib/{version}/'  [env: DEPUSH_DEPLOY_PREFIX]",
     )
     parser.add_argument(
         "--codebase-dir",
         dest="codebase_dir",
-        help="Path to codebase directory containing a 'version' file (default: .)  [env: DEPLOY_CODEBASE_DIR]",
+        help="Path to codebase directory containing a 'version' file (default: .)  [env: DEPUSH_DEPLOY_CODEBASE_DIR]",
     )
     parser.add_argument(
         "--dry-run",
         dest="dry_run",
         action="store_true",
         default=None,
-        help="Print what would be deployed without uploading  [env: DEPLOY_DRY_RUN]",
+        help="Print what would be deployed without uploading  [env: DEPUSH_DEPLOY_DRY_RUN]",
     )
 
     # Local directory options
@@ -516,47 +516,53 @@ def build_parser():
     local_group.add_argument(
         "--local-dest",
         dest="local_dest",
-        help="Root destination directory  [env: DEPLOY_LOCAL_DEST]",
+        help="Root destination directory  [env: DEPUSH_DEPLOY_LOCAL_DEST]",
     )
 
     # S3 / MinIO options
     s3_group = parser.add_argument_group("S3 / MinIO options")
-    s3_group.add_argument("--s3-bucket", dest="s3_bucket", help="[env: S3_BUCKET]")
+    s3_group.add_argument(
+        "--s3-bucket", dest="s3_bucket", help="[env: DEPUSH_S3_BUCKET]"
+    )
     s3_group.add_argument(
         "--s3-endpoint",
         dest="s3_endpoint",
-        help="Custom endpoint URL for MinIO  [env: S3_ENDPOINT]",
+        help="Custom endpoint URL for MinIO  [env: DEPUSH_S3_ENDPOINT]",
     )
-    s3_group.add_argument("--s3-region", dest="s3_region", help="[env: S3_REGION]")
+    s3_group.add_argument(
+        "--s3-region", dest="s3_region", help="[env: DEPUSH_S3_REGION]"
+    )
     s3_group.add_argument(
         "--s3-profile",
         dest="s3_profile",
-        help="AWS credentials profile name  [env: S3_PROFILE, fallback: AWS_PROFILE]",
+        help="AWS credentials profile name  [env: DEPUSH_S3_PROFILE, fallback: AWS_PROFILE]",
     )
     s3_group.add_argument(
-        "--s3-access-key", dest="s3_access_key", help="[env: S3_ACCESS_KEY]"
+        "--s3-access-key", dest="s3_access_key", help="[env: DEPUSH_S3_ACCESS_KEY]"
     )
     s3_group.add_argument(
-        "--s3-secret-key", dest="s3_secret_key", help="[env: S3_SECRET_KEY]"
+        "--s3-secret-key", dest="s3_secret_key", help="[env: DEPUSH_S3_SECRET_KEY]"
     )
 
     # SSH options
     ssh_group = parser.add_argument_group("SSH options")
-    ssh_group.add_argument("--ssh-host", dest="ssh_host", help="[env: SSH_HOST]")
+    ssh_group.add_argument("--ssh-host", dest="ssh_host", help="[env: DEPUSH_SSH_HOST]")
     ssh_group.add_argument(
-        "--ssh-port", dest="ssh_port", type=int, help="[env: SSH_PORT]"
+        "--ssh-port", dest="ssh_port", type=int, help="[env: DEPUSH_SSH_PORT]"
     )
-    ssh_group.add_argument("--ssh-user", dest="ssh_user", help="[env: SSH_USER]")
+    ssh_group.add_argument("--ssh-user", dest="ssh_user", help="[env: DEPUSH_SSH_USER]")
     ssh_group.add_argument(
-        "--ssh-password", dest="ssh_password", help="[env: SSH_PASSWORD]"
+        "--ssh-password", dest="ssh_password", help="[env: DEPUSH_SSH_PASSWORD]"
     )
     ssh_group.add_argument(
         "--ssh-key-file",
         dest="ssh_key_file",
-        help="Path to private key  [env: SSH_KEY_FILE]",
+        help="Path to private key  [env: DEPUSH_SSH_KEY_FILE]",
     )
     ssh_group.add_argument(
-        "--ssh-deploy-root", dest="ssh_deploy_root", help="[env: SSH_DEPLOY_ROOT]"
+        "--ssh-deploy-root",
+        dest="ssh_deploy_root",
+        help="[env: DEPUSH_SSH_DEPLOY_ROOT]",
     )
 
     return parser
@@ -565,24 +571,24 @@ def build_parser():
 def validate(args):
     if not args.target:
         sys.exit(
-            "Error: --target (or DEPLOY_TARGET) is required. Choose from: s3, ssh, local"
+            "Error: --target (or DEPUSH_DEPLOY_TARGET) is required. Choose from: s3, ssh, local"
         )
     if not args.prefix:
-        sys.exit("Error: --prefix (or DEPLOY_PREFIX) is required")
+        sys.exit("Error: --prefix (or DEPUSH_DEPLOY_PREFIX) is required")
     if args.target == "s3" and not args.s3_bucket:
-        sys.exit("Error: --s3-bucket (or S3_BUCKET) is required for s3 target")
+        sys.exit("Error: --s3-bucket (or DEPUSH_S3_BUCKET) is required for s3 target")
     if args.target == "ssh" and not args.ssh_host:
-        sys.exit("Error: --ssh-host (or SSH_HOST) is required for ssh target")
+        sys.exit("Error: --ssh-host (or DEPUSH_SSH_HOST) is required for ssh target")
     if args.target == "local" and not args.local_dest:
         sys.exit(
-            "Error: --local-dest (or DEPLOY_LOCAL_DEST) is required for local target"
+            "Error: --local-dest (or DEPUSH_DEPLOY_LOCAL_DEST) is required for local target"
         )
 
 
 def main():
     parser = build_parser()
 
-    # Pre-parse to get --config / DEPLOY_CONFIG before setting defaults
+    # Pre-parse to get --config / DEPUSH_DEPLOY_CONFIG before setting defaults
     pre, _ = parser.parse_known_args()
     config_path = pre.config or (
         "depush.yaml" if Path("depush.yaml").exists() else None

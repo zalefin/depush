@@ -110,24 +110,24 @@ All options can also be set via environment variables:
 
 | Variable | Description | Default |
 |---|---|---|
-| `DEPLOY_TARGET` | Deployment target: `s3`, `ssh`, or `local` | *(required)* |
-| `DEPLOY_PREFIX` | Path prefix, e.g. `mylib` → `mylib/{version}/` | *(required)* |
-| `DEPLOY_CODEBASE_DIR` | Path to codebase directory | `.` |
-| `DEPLOY_DRY_RUN` | Set to `1`, `true`, or `yes` to preview | `false` |
-| `DEPLOY_CONFIG` | Path to a YAML config file | `depush.yaml` if present |
-| `DEPLOY_LOCAL_DEST` | Root destination for local deployments | `./dist` |
-| `S3_BUCKET` | S3/MinIO bucket name | *(required for s3)* |
-| `S3_ENDPOINT` | Custom endpoint URL for MinIO | *(AWS default)* |
-| `S3_REGION` | AWS region | `us-east-1` |
-| `S3_PROFILE` | AWS credentials profile name (from `~/.aws/credentials`); falls back to `AWS_PROFILE` | |
-| `S3_ACCESS_KEY` | Access key / MinIO username | |
-| `S3_SECRET_KEY` | Secret key / MinIO password | |
-| `SSH_HOST` | SSH server hostname or IP | *(required for ssh)* |
-| `SSH_PORT` | SSH port | `22` |
-| `SSH_USER` | SSH username | `admin` |
-| `SSH_PASSWORD` | SSH password (omit to use key auth) | |
-| `SSH_KEY_FILE` | Path to private key file | |
-| `SSH_DEPLOY_ROOT` | Absolute path on the remote server | `/deployments` |
+| `DEPUSH_DEPLOY_TARGET` | Deployment target: `s3`, `ssh`, or `local` | *(required)* |
+| `DEPUSH_DEPLOY_PREFIX` | Path prefix, e.g. `mylib` → `mylib/{version}/` | *(required)* |
+| `DEPUSH_DEPLOY_CODEBASE_DIR` | Path to codebase directory | `.` |
+| `DEPUSH_DEPLOY_DRY_RUN` | Set to `1`, `true`, or `yes` to preview | `false` |
+| `DEPUSH_DEPLOY_CONFIG` | Path to a YAML config file | `depush.yaml` if present |
+| `DEPUSH_DEPLOY_LOCAL_DEST` | Root destination for local deployments | `./dist` |
+| `DEPUSH_S3_BUCKET` | S3/MinIO bucket name | *(required for s3)* |
+| `DEPUSH_S3_ENDPOINT` | Custom endpoint URL for MinIO | *(AWS default)* |
+| `DEPUSH_S3_REGION` | AWS region; falls back to `AWS_DEFAULT_REGION` | `us-east-1` |
+| `DEPUSH_S3_PROFILE` | AWS credentials profile name (from `~/.aws/credentials`); falls back to `AWS_PROFILE` | |
+| `DEPUSH_S3_ACCESS_KEY` | Access key / MinIO username; falls back to `AWS_ACCESS_KEY_ID` | |
+| `DEPUSH_S3_SECRET_KEY` | Secret key / MinIO password; falls back to `AWS_SECRET_ACCESS_KEY` | |
+| `DEPUSH_SSH_HOST` | SSH server hostname or IP | *(required for ssh)* |
+| `DEPUSH_SSH_PORT` | SSH port | `22` |
+| `DEPUSH_SSH_USER` | SSH username | `admin` |
+| `DEPUSH_SSH_PASSWORD` | SSH password (omit to use key auth) | |
+| `DEPUSH_SSH_KEY_FILE` | Path to private key file | |
+| `DEPUSH_SSH_DEPLOY_ROOT` | Absolute path on the remote server | `/deployments` |
 
 ---
 
