@@ -12,4 +12,5 @@ wheels/
 # Generated test SSH keypair — run ./generate_test_keys.sh to create
 test-keys/
 
+deploy.sh
 
