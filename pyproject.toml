@@ -7,7 +7,7 @@ name = "depush"
 version = "0.1.0"
 description = "Deploy a versioned codebase to S3/MinIO, SSH, or a local directory"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.8"
 license = { text = "MIT" }
 dependencies = [
     "boto3>=1.42.69",
