@@ -57,7 +57,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 # Hardcoded fallback defaults
-DEFAULTS: dict = {
+DEFAULTS = {
     "codebase_dir": ".",
     "dry_run": False,
     "local_dest": "./dist",
@@ -68,7 +68,7 @@ DEFAULTS: dict = {
 }
 
 # Mapping from argparse dest -> environment variable name
-ENV_MAP: dict[str, str] = {
+ENV_MAP = {
     "target": "DEPLOY_TARGET",
     "prefix": "DEPLOY_PREFIX",
     "codebase_dir": "DEPLOY_CODEBASE_DIR",
@@ -94,7 +94,7 @@ ENV_MAP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 
-def load_yaml_config(path: str) -> dict:
+def load_yaml_config(path):
     """Load and flatten a YAML config file into a flat dict matching argparse dests."""
     try:
         import yaml
@@ -108,7 +108,7 @@ def load_yaml_config(path: str) -> dict:
     with config_path.open() as f:
         raw = yaml.safe_load(f) or {}
 
-    flat: dict = {}
+    flat = {}
 
     # Top-level general keys
     for key in ("target", "prefix", "codebase_dir", "dry_run"):
@@ -144,7 +144,7 @@ def load_yaml_config(path: str) -> dict:
     return flat
 
 
-def resolve_defaults(yaml_cfg: dict) -> dict:
+def resolve_defaults(yaml_cfg):
     """
     Build a merged defaults dict with precedence:
     env var > YAML config > hardcoded default.
@@ -182,14 +182,14 @@ def resolve_defaults(yaml_cfg: dict) -> dict:
     return merged
 
 
-def read_version(codebase_dir: Path) -> str:
+def read_version(codebase_dir):
     version_file = codebase_dir / "version"
     if not version_file.exists():
         sys.exit(f"Error: version file not found at {version_file}")
     return version_file.read_text().strip()
 
 
-def load_ignore_spec(codebase_dir: Path):
+def load_ignore_spec(codebase_dir):
     """Load .depushignore from codebase_dir and return a pathspec matcher, or None."""
     ignore_file = codebase_dir / ".depushignore"
     if not ignore_file.exists():
@@ -202,7 +202,7 @@ def load_ignore_spec(codebase_dir: Path):
     return pathspec.PathSpec.from_lines("gitignore", lines)
 
 
-def collect_files(codebase_dir: Path, ignore_spec=None) -> list[Path]:
+def collect_files(codebase_dir, ignore_spec=None):
     """Return all files under codebase_dir, excluding .git, depush.yaml, .depushignore, and any .depushignore patterns."""
     excluded = {codebase_dir / "depush.yaml", codebase_dir / ".depushignore"}
     files = []
@@ -224,9 +224,7 @@ def collect_files(codebase_dir: Path, ignore_spec=None) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
-def deploy_local(
-    args: argparse.Namespace, codebase_dir: Path, deploy_path: str
-) -> None:
+def deploy_local(args, codebase_dir, deploy_path):
     dest = Path(args.local_dest) / deploy_path
     ignore_spec = load_ignore_spec(codebase_dir)
 
@@ -273,7 +271,7 @@ def deploy_local(
 # ---------------------------------------------------------------------------
 
 
-def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -> None:
+def deploy_s3(args, codebase_dir, deploy_path):
     try:
         import boto3
         from botocore.client import Config
@@ -288,7 +286,7 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
         aws_secret_access_key=args.s3_secret_key or None,
         region_name=args.s3_region,
     )
-    client_kwargs: dict = {}
+    client_kwargs = {}
     if args.s3_endpoint:
         client_kwargs["endpoint_url"] = args.s3_endpoint
         client_kwargs["config"] = Config(signature_version="s3v4")
@@ -338,7 +336,7 @@ def deploy_s3(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) ->
 # ---------------------------------------------------------------------------
 
 
-def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -> None:
+def deploy_ssh(args, codebase_dir, deploy_path):
     ignore_spec = load_ignore_spec(codebase_dir)
     remote_root = f"{args.ssh_deploy_root}/{deploy_path}"
 
@@ -359,12 +357,7 @@ def deploy_ssh(args: argparse.Namespace, codebase_dir: Path, deploy_path: str) -
         _deploy_ssh_paramiko(args, codebase_dir, remote_root, ignore_spec)
 
 
-def _deploy_ssh_rsync(
-    args: argparse.Namespace,
-    codebase_dir: Path,
-    remote_root: str,
-    ignore_spec,
-) -> None:
+def _deploy_ssh_rsync(args, codebase_dir, remote_root, ignore_spec):
     ssh_opts = f"ssh -p {args.ssh_port}"
     if args.ssh_key_file:
         ssh_opts += f" -i {args.ssh_key_file}"
@@ -394,12 +387,7 @@ def _deploy_ssh_rsync(
         sys.exit(f"Error: rsync failed with exit code {result.returncode}")
 
 
-def _deploy_ssh_paramiko(
-    args: argparse.Namespace,
-    codebase_dir: Path,
-    remote_root: str,
-    ignore_spec,
-) -> None:
+def _deploy_ssh_paramiko(args, codebase_dir, remote_root, ignore_spec):
     try:
         import paramiko
     except ImportError:
@@ -408,7 +396,7 @@ def _deploy_ssh_paramiko(
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    connect_kwargs: dict = {
+    connect_kwargs = {
         "hostname": args.ssh_host,
         "port": args.ssh_port,
         "username": args.ssh_user,
@@ -423,7 +411,7 @@ def _deploy_ssh_paramiko(
     except Exception as e:
         sys.exit(f"Error: SSH connection failed: {e}")
 
-    def remote_exec(cmd: str) -> None:
+    def remote_exec(cmd):
         _, stdout, stderr = client.exec_command(cmd)
         exit_code = stdout.channel.recv_exit_status()
         if exit_code != 0:
@@ -471,7 +459,7 @@ def _deploy_ssh_paramiko(
 # ---------------------------------------------------------------------------
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser():
     parser = argparse.ArgumentParser(
         description="Deploy a versioned codebase directory to S3/MinIO, SSH, or a local directory.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -556,7 +544,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def validate(args: argparse.Namespace) -> None:
+def validate(args):
     if not args.target:
         sys.exit(
             "Error: --target (or DEPLOY_TARGET) is required. Choose from: s3, ssh, local"
@@ -573,7 +561,7 @@ def validate(args: argparse.Namespace) -> None:
         )
 
 
-def main() -> None:
+def main():
     parser = build_parser()
 
     # Pre-parse to get --config / DEPLOY_CONFIG before setting defaults
