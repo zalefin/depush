@@ -256,6 +256,32 @@ class TestResolveDefaults:
         merged = depush.resolve_defaults({"ssh_port": 9999})
         assert merged["ssh_port"] == 9999
 
+    def test_aws_access_key_id_fallback(self, monkeypatch):
+        monkeypatch.delenv("S3_ACCESS_KEY", raising=False)
+        monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_access_key"] == "AKIAIOSFODNN7EXAMPLE"
+
+    def test_aws_secret_access_key_fallback(self, monkeypatch):
+        monkeypatch.delenv("S3_SECRET_KEY", raising=False)
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
+        merged = depush.resolve_defaults({})
+        assert merged["s3_secret_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+    def test_s3_access_key_takes_precedence_over_aws(self, monkeypatch):
+        monkeypatch.setenv("S3_ACCESS_KEY", "explicit-key")
+        monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fallback-key")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_access_key"] == "explicit-key"
+
+    def test_s3_secret_key_takes_precedence_over_aws(self, monkeypatch):
+        monkeypatch.setenv("S3_SECRET_KEY", "explicit-secret")
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fallback-secret")
+        merged = depush.resolve_defaults({})
+        assert merged["s3_secret_key"] == "explicit-secret"
+
 
 # ---------------------------------------------------------------------------
 # read_version

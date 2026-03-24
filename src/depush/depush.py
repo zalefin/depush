@@ -33,8 +33,8 @@ Environment variables:
     S3_BUCKET              Bucket name (required for s3 target)
     S3_ENDPOINT            Custom endpoint URL for MinIO, e.g. http://localhost:9000
     S3_REGION              AWS region (default: us-east-1)
-    S3_ACCESS_KEY          Access key / MinIO username
-    S3_SECRET_KEY          Secret key / MinIO password
+    S3_ACCESS_KEY          Access key / MinIO username  (alias: AWS_ACCESS_KEY_ID)
+    S3_SECRET_KEY          Secret key / MinIO password  (alias: AWS_SECRET_ACCESS_KEY)
 
   SSH:
     SSH_HOST               SSH server hostname or IP (required for ssh target)
@@ -178,6 +178,17 @@ def resolve_defaults(yaml_cfg):
         aws_profile = os.environ.get("AWS_PROFILE")
         if aws_profile:
             merged["s3_profile"] = aws_profile
+
+    # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are the standard AWS env vars;
+    # use them as fallbacks when S3_ACCESS_KEY / S3_SECRET_KEY are not set.
+    if "s3_access_key" not in merged:
+        val = os.environ.get("AWS_ACCESS_KEY_ID")
+        if val:
+            merged["s3_access_key"] = val
+    if "s3_secret_key" not in merged:
+        val = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        if val:
+            merged["s3_secret_key"] = val
 
     return merged
 
