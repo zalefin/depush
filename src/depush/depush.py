@@ -23,7 +23,7 @@ Environment variables:
     DEPUSH_DEPLOY_TARGET          Deployment target: s3, ssh, or local (required)
     DEPUSH_DEPLOY_PREFIX          Path prefix, e.g. 'mylib' -> 'mylib/{version}/' (required)
     DEPUSH_DEPLOY_CODEBASE_DIR    Path to codebase directory containing a 'version' file (default: .)
-    DEPUSH_VERSION_OVERRIDE        Override the deployment version; the version file is not required when set
+    DEPUSH_DEPLOY_VERSION_OVERRIDE  Override the deployment version; the version file is not required when set
     DEPUSH_DEPLOY_DRY_RUN         Set to '1', 'true', or 'yes' to preview without uploading
     DEPUSH_DEPLOY_CONFIG          Path to a YAML config file (default: depush.yaml in CWD if present)
 
@@ -73,7 +73,7 @@ ENV_MAP = {
     "target": "DEPUSH_DEPLOY_TARGET",
     "prefix": "DEPUSH_DEPLOY_PREFIX",
     "codebase_dir": "DEPUSH_DEPLOY_CODEBASE_DIR",
-    "version_override": "DEPUSH_VERSION_OVERRIDE",
+    "version_override": "DEPUSH_DEPLOY_VERSION_OVERRIDE",
     "dry_run": "DEPUSH_DEPLOY_DRY_RUN",
     "local_dest": "DEPUSH_DEPLOY_LOCAL_DEST",
     "s3_bucket": "DEPUSH_S3_BUCKET",
@@ -508,7 +508,7 @@ def build_parser():
     parser.add_argument(
         "--version-override",
         dest="version_override",
-        help="Override the deployment version; the version file is not required when set  [env: DEPUSH_VERSION_OVERRIDE]",
+        help="Override the deployment version; the version file is not required when set  [env: DEPUSH_DEPLOY_VERSION_OVERRIDE]",
     )
     parser.add_argument(
         "--dry-run",
